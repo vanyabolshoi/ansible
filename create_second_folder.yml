@@ -1,14 +1,12 @@
 ---
-- name: Reboot Windows machine with 10 seconds delay
+- name: Open 10 "This PC" windows on Windows
   hosts: windows
   gather_facts: false
 
   tasks:
-    - name: Wait 10 seconds before reboot
+    - name: Open 10 explorer windows pointing to This PC
       win_shell: |
-        Start-Sleep -Seconds 10
-
-    - name: Reboot the machine
-      win_reboot:
-        reboot_timeout: 600
-        msg: "Перезагрузка через 10 секунд по заданию Ansible"
+        for ($i=1; $i -le 10; $i++) {
+            Start-Process explorer.exe "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"
+            Start-Sleep -Milliseconds 200
+        }
