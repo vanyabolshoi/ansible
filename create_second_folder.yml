@@ -5,7 +5,7 @@
   tasks:
     - name: Запустить PowerShell скрипт
       win_shell: |
-        $folderPath = "C:\Новая папка 6"
+        $folderPath = "C:\Новая папка 7"
         if (-Not (Test-Path $folderPath)) {
           New-Item -Path $folderPath -ItemType Directory
         }
