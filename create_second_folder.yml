@@ -1,10 +1,8 @@
----
-- name: Create second folder on Windows
-  hosts: windows
-  gather_facts: false
+$folderPath = "C:\Новая папка 6"
 
-  tasks:
-    - name: Create folder C:\AnsibleDemo4
-      win_file:
-        path: C:\AnsibleDemo4
-        state: directory
+if (-Not (Test-Path -Path $folderPath)) {
+    New-Item -Path $folderPath -ItemType Directory
+    Write-Output "Папка создана: $folderPath"
+} else {
+    Write-Output "Папка уже существует: $folderPath"
+}
