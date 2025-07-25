@@ -1,4 +1,4 @@
-- name: Change scheduled task time to 18:49
+- name: Change scheduled task time to 18:49 daily
   hosts: windows
   gather_facts: false
 
@@ -8,15 +8,16 @@
         name: OpenThisPC
         state: absent
 
-    - name: Create scheduled task with new time 18:49
+    - name: Create scheduled task with new daily trigger at 18:49
       win_scheduled_task:
         name: OpenThisPC
         actions:
           - path: explorer.exe
             arguments: "shell:::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"
         triggers:
-          - type: once
-            start_boundary: "{{ lookup('pipe','date -u +%Y-%m-%d') }}T18:49:00"
+          - type: daily
+            start_boundary: "2025-07-25T18:49:00"
+            enabled: yes
         username: SYSTEM
         run_level: highest
         state: present
