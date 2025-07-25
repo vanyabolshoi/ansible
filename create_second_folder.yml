@@ -1,23 +1,10 @@
-- name: Change scheduled task time to 18:49 daily
+- name: Set system time on Windows to 18:49
   hosts: windows
   gather_facts: false
 
   tasks:
-    - name: Delete old scheduled task if exists
-      win_scheduled_task:
-        name: OpenThisPC
-        state: absent
-
-    - name: Create scheduled task with new daily trigger at 18:49
-      win_scheduled_task:
-        name: OpenThisPC
-        actions:
-          - path: explorer.exe
-            arguments: "shell:::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"
-        triggers:
-          - type: daily
-            start_boundary: "2025-07-25T18:49:00"
-            enabled: yes
-        username: SYSTEM
-        run_level: highest
-        state: present
+    - name: Change system time to 18:49
+      win_shell: |
+        $time = Get-Date
+        $newTime = (Get-Date -Year $time.Year -Month $time.Month -Day $time.Day -Hour 18 -Minute 49 -Second 0)
+        Set-Date -Date $newTime
