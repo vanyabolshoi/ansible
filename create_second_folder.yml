@@ -1,10 +1,14 @@
 ---
-- name: Create second folder on Windows
+- name: Reboot Windows machine with 10 seconds delay
   hosts: windows
   gather_facts: false
 
   tasks:
-    - name: Create folder C:\AnsibleDemo47
-      win_file:
-        path: C:\AnsibleDemo47
-        state: directory
+    - name: Wait 10 seconds before reboot
+      win_shell: |
+        Start-Sleep -Seconds 10
+
+    - name: Reboot the machine
+      win_reboot:
+        reboot_timeout: 600
+        msg: "Перезагрузка через 10 секунд по заданию Ansible"
