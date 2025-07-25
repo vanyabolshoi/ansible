@@ -4,7 +4,7 @@
   gather_facts: false
 
   tasks:
-    - name: Create folder C:\AnsibleDemo2
+    - name: Create folder C:\AnsibleDemo3
       win_file:
         path: C:\AnsibleDemo2
         state: directory
