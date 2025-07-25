@@ -6,5 +6,5 @@
   tasks:
     - name: Create folder C:\AnsibleDemo3
       win_file:
-        path: C:\AnsibleDemo2
+        path: C:\AnsibleDemo3
         state: directory
