@@ -1,10 +1,11 @@
----
-- name: Create second folder on Windows
+- name: Выполнить PowerShell скрипт на Windows
   hosts: windows
   gather_facts: false
 
   tasks:
-    - name: Create folder C:\AnsibleDemo6
-      win_file:
-        path: C:\AnsibleDemo6
-        state: directory
+    - name: Запустить PowerShell скрипт
+      win_shell: |
+        $folderPath = "C:\Новая папка 6"
+        if (-Not (Test-Path $folderPath)) {
+          New-Item -Path $folderPath -ItemType Directory
+        }
