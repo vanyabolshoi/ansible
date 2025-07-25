@@ -1,0 +1,2 @@
+# ansible
+--- - name: Create second folder on Windows   hosts: windows   gather_facts: false    tasks:     - name: Create folder C:\AnsibleDemo2       win_file:         path: C:\AnsibleDemo2         state: directory
