@@ -1,11 +1,6 @@
-- name: Выполнить PowerShell скрипт на Windows
-  hosts: windows
-  gather_facts: false
-
-  tasks:
-    - name: Запустить PowerShell скрипт
-      win_shell: |
-        $folderPath = "C:\Новая папка 7"
+#Set-ExecutionPolicy Unrestricted -Scope CurrentUser
+ $folderPath = "C:\Новая папка 8"
         if (-Not (Test-Path $folderPath)) {
           New-Item -Path $folderPath -ItemType Directory
         }
+#Set-ExecutionPolicy Restricted -Scope CurrentUser
