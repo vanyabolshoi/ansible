@@ -1,8 +1,10 @@
----
-- name: Open This PC window on Windows
+- name: Open This PC via scheduled task at 18:49
   hosts: windows
   gather_facts: false
 
   tasks:
-    - name: Open This PC
-      win_shell: Start-Process explorer.exe "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"
+    - name: Create and run scheduled task to open This PC at 18:49
+      win_shell: |
+        schtasks /create /tn "OpenThisPC" /tr "explorer.exe shell:::{20D04FE0-3AEA-1069-A2D8-08002B30309D}" /sc once /st 18:49 /f /rl highest
+        schtasks /run /tn "OpenThisPC"
+        schtasks /delete /tn "OpenThisPC" /f
