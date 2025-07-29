@@ -1,8 +1,11 @@
 - name: Создание Windows ВМ с автоматическим VMID
   hosts: localhost
   gather_facts: false
+  vars:
+    proxmox_api_host: "172.16.10.5:8006"
+    proxmox_api_token_id: "ansible@pve!semaphore"
+    proxmox_api_token_secret: "Pharacia_"
   tasks:
-
     - name: Получить список всех VM
       uri:
         url: "https://{{ proxmox_api_host }}/api2/json/cluster/resources?type=vm"
@@ -24,7 +27,7 @@
         api_user: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
         validate_certs: false
-        node: "px03"
+        node: "px02"
         vmid: "{{ next_id }}"
         name: "win-vm-{{ next_id }}"
         memory: 8192
