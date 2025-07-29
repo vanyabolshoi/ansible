@@ -1,20 +1,26 @@
+- name: Создание ВМ на Proxmox
+  hosts: localhost
+  gather_facts: false
+  tasks:
     - name: Создать виртуальную машину
       community.general.proxmox_kvm:
-        api_host: "172.16.10.5"
-        api_user: "root@pam"
-        api_password: "{{ lookup('env', 'PVE_PASS') }}"
-        vmid: "{{ vmid }}"
-        name: "{{ name }}"
-        cores: "{{ cores }}"
-        sockets: "{{ sockets }}"
-        memory: "{{ memory }}"
-        scsihw: "virtio-scsi-pci"
-        boot: "{{ boot_order }}"
-        ide2: "{{ iso_storage }}:{{ iso_image }},media=cdrom"
-        sata0: "{{ storage }}:{{ disk_gb }}"
+        api_user: "{{ proxmox_user }}"
+        api_password: "{{ proxmox_password }}"
+        api_host: "{{ proxmox_host }}"
+        node: "{{ proxmox_node }}"
+        vmid: "{{ vm_id }}"
+        name: "{{ vm_name }}"
+        memory: "{{ vm_memory }}"
+        cores: "{{ vm_cores }}"
+        sockets: 1
         net:
-          net0:
-            model: "{{ net_model }}"
-            bridge: "{{ net_bridge }}"
+          net0: "virtio,bridge=vmbr0"
         ostype: l26
+        ide2: "local:cloudinit"
+        scsihw: virtio-scsi-pci
+        scsi0: "{{ vm_disk_storage }}:{{ vm_disk_size }}"
+        ciuser: "{{ vm_user }}"
+        cipassword: "{{ vm_password }}"
+        ipconfig0: "ip={{ vm_ip }}/24,gw={{ vm_gateway }}"
+        pool: "vms"
         state: present
