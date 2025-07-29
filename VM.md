@@ -33,13 +33,13 @@
         agent: 1
         state: present
 
-        # Диск: 50GB на scsi0, хранится в local
-        scsi: "{{ iso_storage }}:{{ disk_size_gb }}"
+        scsi:
+          scsi0:
+            size: "{{ disk_size_gb }}G"
+            storage: "{{ iso_storage }}"
 
-        # Подключаем ISO к ide2 в режиме CD-ROM
         ide2: "{{ iso_storage }}:iso/{{ iso_image }},media=cdrom"
 
-        # Сеть
         net:
           model: virtio
           bridge: vmbr0
