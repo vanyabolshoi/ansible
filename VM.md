@@ -1,7 +1,8 @@
-- hosts: localhost
+- name: Создать виртуальную машину Windows в Proxmox
+  hosts: localhost
   gather_facts: false
   tasks:
-    - name: Создать виртуальную машину Windows в Proxmox
+    - name: Создать виртуальную машину Windows
       community.general.proxmox_kvm:
         api_host: "172.16.10.5"
         api_user: "root@pam"
@@ -17,13 +18,12 @@
         ostype: win10
         ide:
           0: "VMstorage02:vm-127-disk-0,size=50G"
-          2: "local:iso/Windows.iso,media=cdrom"
+          1: "local:iso/virtio-win.iso,media=cdrom"
+          2: "local:iso/Win10_22H2.iso,media=cdrom"
         net:
-          0: "model=e1000,bridge=vmbr0,firewall=1,hwaddr=CA:BE:9B:08:D3:BD"
-        usb:
-          0: "host=04b3:4010"
+          0: "model=virtio,bridge=vmbr0"
         boot: cd
         bootdisk: ide0
         agent: 1
-        onboot: false
+        onboot: true
         state: present
