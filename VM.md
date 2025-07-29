@@ -1,6 +1,9 @@
 - name: Создать Windows ВМ с токеном
   hosts: proxmox
   gather_facts: false
+  environment:
+    LANG: "en_US.UTF-8"
+    LC_ALL: "en_US.UTF-8"
   vars:
     vm_name: win-vm
     free_vmid: 101
@@ -8,8 +11,8 @@
     - name: Создать Windows ВМ с токеном
       community.general.proxmox_kvm:
         api_host: "{{ proxmox_api_host }}"
-        api_user: "{{ ansible_user }}"            # ansible@pve
-        api_token_id: "{{ proxmox_api_token_id }}"       # ansible
+        api_user: "{{ ansible_user }}"
+        api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
         validate_certs: "{{ validate_certs }}"
         node: "px02"
