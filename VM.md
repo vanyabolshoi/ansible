@@ -8,7 +8,7 @@
         api_user: "root@pam"
         api_password: "Pharmacia_"
         validate_certs: false
-        node: "px03"
+        node: "px02"
         vmid: 127
         name: "win-vm"
         memory: 8192
