@@ -1,6 +1,10 @@
 - name: Создать Windows ВМ с автоматическим VMID из инвентаря (используем токен)
   hosts: proxmox
   gather_facts: false
+  environment:
+    PYTHONIOENCODING: utf-8
+    LANG: en_US.UTF-8
+    LC_ALL: en_US.UTF-8
   vars:
     vm_name: win-vm
     start_vmid: 100
@@ -12,13 +16,17 @@
         headers:
           Authorization: "PVEAPIToken={{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
         validate_certs: "{{ validate_certs | default(false) }}"
+        return_content: yes
       register: vm_list
       delegate_to: localhost
       run_once: true
 
+    - debug:
+        var: vm_list.content
+
     - name: Сформировать список занятых vmid
       set_fact:
-        used_vmids: "{{ vm_list.json.data | map(attribute='vmid') | list }}"
+        used_vmids: "{{ (vm_list.json.data | map(attribute='vmid')) | list }}"
 
     - name: Найти свободный vmid
       set_fact:
