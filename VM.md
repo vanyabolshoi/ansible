@@ -1,9 +1,6 @@
 - name: Создать Windows ВМ с токеном
   hosts: proxmox
   gather_facts: false
-  environment:
-    LANG: en_US.UTF-8
-    LC_ALL: en_US.UTF-8
   vars:
     vm_name: win-vm
     free_vmid: 101
