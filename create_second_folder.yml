@@ -1,10 +1,21 @@
-- name: Set system time on Windows to 18:49
-  hosts: windows
+---
+- name: Create LXC container on Proxmox
+  hosts: localhost
   gather_facts: false
-
   tasks:
-    - name: Change system time to 18:49
-      win_shell: |
-        $time = Get-Date
-        $newTime = (Get-Date -Year $time.Year -Month $time.Month -Day $time.Day -Hour 18 -Minute 49 -Second 0)
-        Set-Date -Date $newTime
+    - name: Create LXC
+      community.general.proxmox:
+        api_host: "172.16.10.5"
+        api_user: "ansible@pve"
+        api_password: "Pharacia_"
+        node: "pve"
+        vmid: 105
+        hostname: "test-lxc"
+        ostemplate: "local:vztmpl/debian-12-standard_12.0-1_amd64.tar.zst"
+        password: "Pharacia_"
+        memory: 512
+        swap: 512
+        cores: 1
+        netif: '{"net0":"name=eth0,bridge=vmbr0,ip=dhcp"}'
+        storage: "local-lvm"
+        state: present
