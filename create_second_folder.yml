@@ -1,34 +1,15 @@
 ---
-- name: Create minimal Ubuntu 24.04 LXC container on px02
-  hosts: localhost
-  gather_facts: false
-
+- hosts: localhost
   tasks:
-    - name: Create LXC container
+    - name: Проверка API Proxmox
       community.general.proxmox:
         api_host: "172.16.10.5"
         api_user: "ansible@pve"
         api_password: "Pharacia_"
-        api_token_id: ""  # можно использовать вместо user/password
-        api_token_secret: "" # можно использовать вместо user/password
-        validate_certs: false  # если используется самоподписанный сертификат
         node: "px02"
         vmid: 150
-        hostname: "ubuntu2404-lxc"
-        ostemplate: "local:ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
-        password: "Pharacia_"
-        memory: 500
-        swap: 256
-        cores: 1
-        disk: "local-lvm:10"
-        netif:
-          net0: "name=eth0,bridge=vmbr0,ip=dhcp"
+        hostname: "test-container"
         state: present
-        timeout: 300
-      register: container_result
-      ignore_errors: yes
+      register: result
 
-    - name: Debug container creation result
-      ansible.builtin.debug:
-        var: container_result
-      when: container_result is defined
+    - debug: var=result
