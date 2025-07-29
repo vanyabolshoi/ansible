@@ -16,11 +16,14 @@
         scsihw: virtio-scsi-pci
         boot: cd
         bootdisk: scsi0
-        ide2: "local:iso/Windows.iso,media=cdrom"
-        scsi0: "local:50,format=raw"
-        net0:
-          model: virtio
-          bridge: vmbr0
+        ide:
+          2: "local:iso/Windows.iso,media=cdrom"
+        scsi:
+          0: "local:50,format=raw"
+        net:
+          0:
+            model: virtio
+            bridge: vmbr0
         ostype: win10
         agent: 1
         state: present
