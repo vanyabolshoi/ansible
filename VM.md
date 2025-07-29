@@ -8,7 +8,7 @@
         api_password: "Pharmacia_"
         validate_certs: false
         node: "px02"
-        vmid: 123
+        vmid: 124
         name: "win-vm"
         memory: 4096
         cores: 4
