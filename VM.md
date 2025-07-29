@@ -1,8 +1,36 @@
----
 - name: Создать Windows ВМ с токеном
   hosts: proxmox
   gather_facts: false
+  vars:
+    vm_name: win-vm
+    start_vmid: 100
   tasks:
+    - name: Получить список всех VM
+      uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/cluster/resources?type=vm"
+        method: GET
+        headers:
+          Authorization: "PVEAPIToken={{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+        validate_certs: "{{ validate_certs | default(false) }}"
+        return_content: yes
+      register: vm_list
+      delegate_to: localhost
+      run_once: true
+
+    - name: Сформировать список занятых vmid
+      set_fact:
+        used_vmids: "{{ (vm_list.json.data | map(attribute='vmid')) | list }}"
+
+    - name: Найти первый свободный vmid
+      set_fact:
+        free_vmid: "{{ item }}"
+      loop: "{{ range(start_vmid, 9999) | list }}"
+      when: item not in used_vmids
+      register: vmid_search
+      until: free_vmid is defined
+      retries: 1000
+      delay: 0
+
     - name: Создать Windows ВМ с токеном
       community.general.proxmox_kvm:
         api_host: "{{ proxmox_api_host }}"
