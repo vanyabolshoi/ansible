@@ -6,13 +6,11 @@
         api_user: "ansible@pve"
         api_password: "Pharacia_"
         node: "px02"
-        vmid: 158
+        vmid: 150
         hostname: "test-container"
         state: present
 
         ostemplate: "local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst"
-
         memory: 2048
         cores: 2
-
         disk_volume: "local-lvm:16"
