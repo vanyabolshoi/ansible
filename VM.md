@@ -28,15 +28,9 @@
       set_fact:
         used_vmids: "{{ (vm_list.json.data | map(attribute='vmid')) | list }}"
 
-    - name: Найти свободный vmid
+    - name: Найти первый свободный vmid
       set_fact:
-        free_vmid: "{{ item }}"
-      loop: "{{ range(start_vmid, 9999) | list }}"
-      when: item not in used_vmids
-      register: vmid_search
-      until: free_vmid is defined
-      retries: 1000
-      delay: 0
+        free_vmid: "{{ (range(start_vmid, 9999) | difference(used_vmids)) | first }}"
 
     - name: Создать Windows ВМ с найденным vmid
       community.general.proxmox_kvm:
