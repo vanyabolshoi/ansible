@@ -1,9 +1,9 @@
 ---
-- name: Create Ubuntu 24.04 LXC container on px02
+- name: Create minimal Ubuntu 24.04 LXC container on px02
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: Create LXC
+    - name: Create LXC container
       community.general.proxmox:
         api_host: "172.16.10.5"
         api_user: "ansible@pve"
@@ -13,9 +13,10 @@
         hostname: "ubuntu2404-lxc"
         ostemplate: "local:ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
         password: "Pharacia_"
-        memory: 1024
-        swap: 512
-        cores: 2
-        netif: '{"net0":"name=eth0,bridge=vmbr0,ip=dhcp"}'
+        memory: 500
+        swap: 256
+        cores: 1
         storage: "local-lvm"
+        rootfs: "local-lvm:10"
+        netif: '{"net0":"name=eth0,bridge=vmbr0,ip=dhcp"}'
         state: present
