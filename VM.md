@@ -1,36 +1,26 @@
----
-- name: Создание Windows VM на Proxmox px02
-  hosts: localhost
+- hosts: localhost
   gather_facts: false
-  vars:
-    proxmox_host: "172.16.10.5"
-    proxmox_user: "root@pam"
-    proxmox_password: "Pharmacia_"
-    proxmox_node: "px02"
-    vmid: 120
-    vm_name: "win-vm"
-    iso_storage: "local"
-    iso_image: "Windows.iso"
-    disk_size_gb: 50
-    memory_mb: 4096
-    cores: 4
   tasks:
-    - name: Создать виртуальную машину Windows
+    - name: Создать виртуальную машину Windows в Proxmox
       community.general.proxmox_kvm:
-        api_host: "{{ proxmox_host }}"
-        api_user: "{{ proxmox_user }}"
-        api_password: "{{ proxmox_password }}"
-        node: "{{ proxmox_node }}"
-        vmid: "{{ vmid }}"
-        name: "{{ vm_name }}"
-        cores: "{{ cores }}"
-        memory: "{{ memory_mb }}"
+        api_host: "172.16.10.5"
+        api_user: "root@pam"
+        api_password: "Pharmacia_"
+        validate_certs: false
+        node: "px02"
+        vmid: 120
+        name: "win-vm"
+        memory: 4096
+        cores: 4
         sockets: 1
         scsihw: virtio-scsi-pci
         boot: cd
         bootdisk: scsi0
-        ide2: "{{ iso_storage }}:iso/{{ iso_image }},media=cdrom"
-        scsi: "{{ iso_storage }}:{{ disk_size_gb }}"
+        ide2: "local:iso/Windows.iso,media=cdrom"
+        scsi:
+          - size: 50G
+            storage: local
+            type: raw
         net:
           model: virtio
           bridge: vmbr0
