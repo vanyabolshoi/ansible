@@ -1,13 +1,20 @@
 - hosts: localhost
+  gather_facts: false
   tasks:
     - name: Создать LXC контейнер в Proxmox
       community.general.proxmox:
         api_host: "172.16.10.5"
         api_user: "ansible@pve"
         api_password: "Pharacia_"
+        validate_certs: false
         node: "px02"
-        vmid: 150
+        vmid: 151
         hostname: "test-container"
-        state: present
         ostemplate: "local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst"
         storage: "local-lvm"
+        memory: 512
+        cores: 1
+        swap: 512
+        netif: '{"net0":"name=eth0,bridge=vmbr0,ip=dhcp,ip6=auto,type=veth"}'
+        password: "container_root_password"
+        state: present
