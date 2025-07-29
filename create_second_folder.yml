@@ -16,7 +16,7 @@
         cores: 1
         swap: 512
         netif: '{"net0":"name=eth0,bridge=vmbr0,ip=dhcp,ip6=auto,type=veth"}'
-        password: "container_root_password"
+        password: "Pharacia_"
         state: present
       loop:
         - { vmid: 150, hostname: "container-150" }
