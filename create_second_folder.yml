@@ -1,5 +1,5 @@
 ---
-- name: Create LXC container on px02
+- name: Create Ubuntu 24.04 LXC container on px02
   hosts: localhost
   gather_facts: false
   tasks:
@@ -10,12 +10,12 @@
         api_password: "Pharacia_"
         node: "px02"
         vmid: 150
-        hostname: "test-lxc"
-        ostemplate: "local:vztmpl/debian-12-standard_12.0-1_amd64.tar.zst"
+        hostname: "ubuntu2404-lxc"
+        ostemplate: "local:ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
         password: "Pharacia_"
-        memory: 512
+        memory: 1024
         swap: 512
-        cores: 1
+        cores: 2
         netif: '{"net0":"name=eth0,bridge=vmbr0,ip=dhcp"}'
         storage: "local-lvm"
         state: present
