@@ -8,6 +8,8 @@
   vars:
     vm_name: win-vm
     start_vmid: 100
+    # Добавь сюда имя пользователя Proxmox с realm, например:
+    proxmox_api_user: "ansible@pve"
   tasks:
     - name: Получить список всех VM
       uri:
@@ -30,11 +32,18 @@
 
     - name: Найти первый свободный vmid
       set_fact:
-        free_vmid: "{{ (range(start_vmid, 9999) | difference(used_vmids)) | first }}"
+        free_vmid: "{{ item }}"
+      loop: "{{ range(start_vmid, 9999) | list }}"
+      when: item not in used_vmids
+      register: vmid_search
+      until: free_vmid is defined
+      retries: 1000
+      delay: 0
 
     - name: Создать Windows ВМ с найденным vmid
       community.general.proxmox_kvm:
         api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ proxmox_api_user }}"
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
         validate_certs: "{{ validate_certs | default(false) }}"
