@@ -1,23 +1,20 @@
-- hosts: localhost
-  gather_facts: false
-  tasks:
     - name: Создать виртуальную машину
       community.general.proxmox_kvm:
         api_host: "172.16.10.5"
-        api_user: "ansible@pve"
-        api_password: "Pharacia_"
-        validate_certs: false
-        node: "px02"
-        vmid: 201
-        name: "vm-example"
-        memory: 2048
-        cores: 2
-        scsi:
-          - storage=local-lvm,size=32G
-        cdrom: "local:iso/debian-12.iso"
+        api_user: "root@pam"
+        api_password: "{{ lookup('env', 'PVE_PASS') }}"
+        vmid: "{{ vmid }}"
+        name: "{{ name }}"
+        cores: "{{ cores }}"
+        sockets: "{{ sockets }}"
+        memory: "{{ memory }}"
+        scsihw: "virtio-scsi-pci"
+        boot: "{{ boot_order }}"
+        ide2: "{{ iso_storage }}:{{ iso_image }},media=cdrom"
+        sata0: "{{ storage }}:{{ disk_gb }}"
         net:
-          - model=virtio,bridge=vmbr0
+          net0:
+            model: "{{ net_model }}"
+            bridge: "{{ net_bridge }}"
         ostype: l26
-        boot: "cdn"
-        bootdisk: "scsi0"
         state: present
