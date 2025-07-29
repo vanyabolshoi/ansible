@@ -16,7 +16,6 @@
         memory: 500
         swap: 256
         cores: 1
-        storage: "local-lvm"
-        disk: 10
+        disk_volume: "local-lvm:10"
         netif: '{"net0":"name=eth0,bridge=vmbr0,ip=dhcp"}'
         state: present
