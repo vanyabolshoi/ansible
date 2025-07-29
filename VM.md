@@ -8,7 +8,7 @@
         api_password: "Pharmacia_"
         validate_certs: false
         node: "px02"
-        vmid: 124
+        vmid: 127
         name: "win-vm"
         memory: 4096
         cores: 4
@@ -33,5 +33,5 @@
         api_password: "Pharmacia_"
         validate_certs: false
         node: "px02"
-        vmid: 120
+        vmid: 127
         state: started
