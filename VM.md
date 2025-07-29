@@ -17,11 +17,8 @@
         boot: cd
         bootdisk: scsi0
         ide2: "local:iso/Windows.iso,media=cdrom"
-        scsi:
-          - size: 50G
-            storage: local
-            type: raw
-        net:
+        scsi0: "local:50,format=raw"
+        net0:
           model: virtio
           bridge: vmbr0
         ostype: win10
