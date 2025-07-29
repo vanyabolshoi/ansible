@@ -4,6 +4,8 @@
     - name: Создать 4 LXC контейнера в Proxmox
       community.general.proxmox:
         api_host: "172.16.10.5"
+        api_user: "ansible@pve"
+        api_password: "Pharacia_"
         validate_certs: false
         node: "px02"
         vmid: "{{ item.vmid }}"
