@@ -1,15 +1,10 @@
----
-- hosts: localhost
-  tasks:
-    - name: Проверка API Proxmox
-      community.general.proxmox:
-        api_host: "172.16.10.5"
-        api_user: "ansible@pve"
-        api_password: "Pharacia_"
-        node: "px02"
-        vmid: 150
-        hostname: "test-container"
-        state: present
-      register: result
-
-    - debug: var=result
+- name: Создать LXC контейнер
+  community.general.proxmox:
+    api_host: "172.16.10.5"
+    api_user: "ansible@pve"
+    api_password: "Pharacia_"
+    node: "px02"
+    vmid: 150
+    hostname: "test-container"
+    state: present
+    ostemplate: "local:vztmpl/debian-12-standard_12.0-1_amd64.tar.gz"
