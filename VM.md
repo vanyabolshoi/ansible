@@ -1,7 +1,7 @@
 - hosts: localhost
   gather_facts: false
   tasks:
-    - name: Создать виртуальную машину Windows в Proxmox
+    - name: Создать и запустить виртуальную машину Windows в Proxmox
       community.general.proxmox_kvm:
         api_host: "172.16.10.5"
         api_user: "root@pam"
@@ -19,11 +19,9 @@
         ide:
           2: "local:iso/Windows.iso,media=cdrom"
         scsi:
-          0: "local:50,format=raw"
+          0: "local-lvm:50,format=raw"
         net:
-          0:
-            model: virtio
-            bridge: vmbr0
+          0: "model=virtio,bridge=vmbr0"
         ostype: win10
         agent: 1
-        state: present
+        state: started   # здесь включаем запуск сразу после создания
