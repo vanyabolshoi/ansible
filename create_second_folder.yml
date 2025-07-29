@@ -1,5 +1,5 @@
 ---
-- name: Create LXC container on Proxmox
+- name: Create LXC container on px02
   hosts: localhost
   gather_facts: false
   tasks:
@@ -8,8 +8,8 @@
         api_host: "172.16.10.5"
         api_user: "ansible@pve"
         api_password: "Pharacia_"
-        node: "pve"
-        vmid: 105
+        node: "px02"
+        vmid: 150
         hostname: "test-lxc"
         ostemplate: "local:vztmpl/debian-12-standard_12.0-1_amd64.tar.zst"
         password: "Pharacia_"
