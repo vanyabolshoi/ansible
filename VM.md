@@ -13,6 +13,8 @@
           Authorization: "PVEAPIToken={{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
         validate_certs: "{{ validate_certs | default(false) }}"
       register: vm_list
+      delegate_to: localhost
+      run_once: true
 
     - name: Сформировать список занятых vmid
       set_fact:
