@@ -3,11 +3,12 @@
   gather_facts: false
   vars:
     vm_name: win-vm
-    free_vmid: 101  # здесь должен быть вычислен свободный vmid
+    free_vmid: 101
   tasks:
     - name: Создать Windows ВМ с токеном
       community.general.proxmox_kvm:
         api_host: "{{ proxmox_api_host }}"
+        api_user: "ansible@pve"              # <-- ОБЯЗАТЕЛЬНО
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
         validate_certs: false
