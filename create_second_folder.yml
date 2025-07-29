@@ -9,8 +9,9 @@
         vmid: 150
         hostname: "test-container"
         state: present
-
         ostemplate: "local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst"
         memory: 2048
         cores: 2
-        disk_volume: "local-lvm:16"
+        disk_volume:
+          storage: local-lvm
+          size: 16G
