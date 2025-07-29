@@ -1,4 +1,3 @@
----
 - name: Создание Windows VM на Proxmox px02
   hosts: localhost
   gather_facts: false
@@ -38,7 +37,8 @@
             size: "{{ disk_size_gb }}G"
             storage: "{{ iso_storage }}"
 
-        ide2: "{{ iso_storage }}:iso/{{ iso_image }},media=cdrom"
+        ide:
+          ide0: "{{ iso_storage }}:iso/{{ iso_image }},media=cdrom"
 
         net:
           model: virtio
