@@ -30,13 +30,10 @@
         boot: cd
         bootdisk: scsi0
         ide2: "{{ iso_storage }}:iso/{{ iso_image }},media=cdrom"
-        scsi:
-          size: "{{ disk_size_gb }}G"
-          type: scsi
-          storage: "{{ iso_storage }}"
+        scsi: "{{ iso_storage }}:{{ disk_size_gb }}"
         net:
-          - model: virtio
-            bridge: vmbr0
+          model: virtio
+          bridge: vmbr0
         ostype: win10
         agent: 1
         state: present
