@@ -10,12 +10,14 @@
         node: "px02"
         vmid: 201
         name: "vm-example"
-        cores: 2
         memory: 2048
-        net0: "virtio,bridge=vmbr0"
-        ide2: "local:iso/debian-12.iso,media=cdrom"
-        sata0: "local-lvm:32"
+        cores: 2
+        scsi:
+          - storage=local-lvm,size=32G
+        cdrom: "local:iso/debian-12.iso"
+        net:
+          - model=virtio,bridge=vmbr0
         ostype: l26
         boot: "cdn"
-        bootdisk: "sata0"
+        bootdisk: "scsi0"
         state: present
