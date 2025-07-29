@@ -17,6 +17,6 @@
         swap: 256
         cores: 1
         storage: "local-lvm"
-        rootfs: "local-lvm:10"
+        disk: 10
         netif: '{"net0":"name=eth0,bridge=vmbr0,ip=dhcp"}'
         state: present
