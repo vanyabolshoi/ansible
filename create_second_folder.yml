@@ -1,14 +1,17 @@
 ---
 - name: Создать 4 LXC контейнера в Proxmox
-  hosts: localhost
-  gather_facts: no
+  hosts: proxmox
+  gather_facts: false
   tasks:
     - name: Создать LXC контейнеры
       community.general.proxmox:
-        api_host: "172.16.10.5"
-        api_user: "ansible@pve"
-        api_password: "{{ lookup('env', 'PROXMOX_PASSWORD') }}"
-        validate_certs: false
+        api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ ansible_user }}"
+        api_password: "{{ ansible_password }}"
+        # если используешь токены — замени 2 строки выше на:
+        # api_token_id: "{{ proxmox_api_token_id }}"
+        # api_token_secret: "{{ proxmox_api_token_secret }}"
+        validate_certs: "{{ validate_certs | default(False) }}"
         node: "px02"
         vmid: "{{ item.vmid }}"
         hostname: "{{ item.hostname }}"
