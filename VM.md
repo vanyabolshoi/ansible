@@ -2,8 +2,8 @@
   hosts: proxmox
   gather_facts: false
   environment:
-    LANG: "en_US.UTF-8"
-    LC_ALL: "en_US.UTF-8"
+    LANG: en_US.UTF-8
+    LC_ALL: en_US.UTF-8
   vars:
     vm_name: win-vm
     free_vmid: 101
@@ -14,8 +14,8 @@
         api_user: "{{ ansible_user }}"
         api_token_id: "{{ proxmox_api_token_id }}"
         api_token_secret: "{{ proxmox_api_token_secret }}"
-        validate_certs: "{{ validate_certs }}"
-        node: "px02"
+        validate_certs: false
+        node: px02
         vmid: "{{ free_vmid }}"
         name: "{{ vm_name }}"
         memory: 8192
