@@ -1,4 +1,4 @@
-- name: Создать Windows ВМ с автоматическим VMID из инвентаря
+- name: Создать Windows ВМ с автоматическим VMID из инвентаря (используем токен)
   hosts: proxmox
   gather_facts: false
   vars:
@@ -9,9 +9,8 @@
       uri:
         url: "https://{{ proxmox_api_host }}:8006/api2/json/cluster/resources?type=vm"
         method: GET
-        user: "{{ ansible_user }}"
-        password: "{{ ansible_password }}"
-        force_basic_auth: yes
+        headers:
+          Authorization: "PVEAPIToken={{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
         validate_certs: "{{ validate_certs | default(false) }}"
       register: vm_list
 
@@ -32,8 +31,8 @@
     - name: Создать Windows ВМ с найденным vmid
       community.general.proxmox_kvm:
         api_host: "{{ proxmox_api_host }}"
-        api_user: "{{ ansible_user }}"
-        api_password: "{{ ansible_password }}"
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
         validate_certs: "{{ validate_certs | default(false) }}"
         node: "px02"
         vmid: "{{ free_vmid }}"
