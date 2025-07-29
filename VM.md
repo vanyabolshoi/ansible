@@ -1,11 +1,11 @@
-- name: Создать Windows ВМ с токеном
+- name: Windows ВМ
   hosts: proxmox
   gather_facts: false
   vars:
     vm_name: win-vm
     free_vmid: 101
   tasks:
-    - name: Создать Windows ВМ с токеном
+    - name: Windows ВМ
       community.general.proxmox_kvm:
         api_host: "{{ proxmox_api_host }}"
         api_user: "{{ ansible_user }}"
