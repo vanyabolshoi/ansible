@@ -1,24 +1,27 @@
 ---
-- name: Create 3 linked clones from Windows template in Proxmox
-  hosts: proxmox
+- name: Create linked clones with personalized Autounattend ISO and start VMs
+  hosts: localhost
   gather_facts: no
 
   vars:
+    proxmox_api_host: 172.16.10.5
+    ansible_user: ansible@pve
+    ansible_password: Pharacia_
+    node: px02
     template_name: win-template
     clone_base_name: templase
-    node: px02
     count: 3
+    iso_storage: local-lvm
 
   tasks:
-    - name: Create linked clones from template
-      community.general.proxmox_kvm:
-        api_host: "{{ proxmox_api_host }}"
-        api_user: "{{ ansible_user }}"
-        api_password: "{{ ansible_password }}"
-        validate_certs: false
-        node: "{{ node }}"
-        name: "{{ clone_base_name }}{{ item }}"
-        clone: "{{ template_name }}"
-        full: false
+    - name: Ensure genisoimage is installed
+      package:
+        name: genisoimage
         state: present
+      become: yes
+
+    - name: Create clones with unattend ISOs
+      include_tasks: create_vm.yml
       loop: "{{ range(4, 4 + count) | list }}"
+      loop_control:
+        loop_var: clone_number
