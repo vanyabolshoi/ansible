@@ -2,7 +2,10 @@
   hosts: localhost
   gather_facts: false
   tasks:
-    - command: ansible --version
+    - name: Run ansible --version
+      command: ansible --version
       register: ansible_version
-    - debug:
+
+    - name: Show ansible version output
+      debug:
         var: ansible_version.stdout_lines
