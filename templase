@@ -1,5 +1,5 @@
 ---
-- name: Create linked clones with Autounattend ISO attached and start VMs
+- name: Create Autounattend ISO once and create/start clones
   hosts: localhost
   gather_facts: no
 
@@ -11,44 +11,40 @@
     template_name: win-template
     clone_base_name: templase
     count: 3
-    iso_storage: local-lvm    # где хранить ISO, поменяй под свой storage Proxmox
+    iso_storage: local-lvm
 
   tasks:
     - name: Ensure genisoimage is installed
-      ansible.builtin.package:
+      package:
         name: genisoimage
         state: present
       become: yes
 
-    - name: Loop over clones to create Autounattend ISO and create/start VMs
+    - name: Create Autounattend.xml (single file)
+      template:
+        src: templates/autounattend.xml.j2
+        dest: /tmp/autounattend.xml
+
+    - name: Create ISO with Autounattend.xml (single ISO)
+      command: >
+        genisoimage -o /tmp/autounattend.iso -V CIDATA -r -J /tmp/autounattend.xml
+      args:
+        removes: /tmp/autounattend.iso
+
+    - name: Upload ISO to Proxmox storage (single ISO)
+      community.general.proxmox_file:
+        api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ ansible_user }}"
+        api_password: "{{ ansible_password }}"
+        validate_certs: false
+        node: "{{ node }}"
+        storage: "{{ iso_storage }}"
+        file: /tmp/autounattend.iso
+        dest: autounattend.iso
+        state: present
+
+    - name: Create linked clones and attach Autounattend ISO
       block:
-        - name: Create Autounattend.xml for clone {{ item }}
-          ansible.builtin.template:
-            src: templates/autounattend.xml.j2
-            dest: "/tmp/autounattend_{{ item }}.xml"
-          vars:
-            clone_number: "{{ item }}"
-
-        - name: Create ISO with Autounattend.xml for clone {{ item }}
-          ansible.builtin.command:
-            cmd: >
-              genisoimage -o /tmp/autounattend_{{ item }}.iso
-              -V CIDATA -r -J /tmp/autounattend_{{ item }}.xml
-          args:
-            removes: "/tmp/autounattend_{{ item }}.iso"
-
-        - name: Upload ISO to Proxmox storage for clone {{ item }}
-          community.general.proxmox_file:
-            api_host: "{{ proxmox_api_host }}"
-            api_user: "{{ ansible_user }}"
-            api_password: "{{ ansible_password }}"
-            validate_certs: false
-            node: "{{ node }}"
-            storage: "{{ iso_storage }}"
-            file: "/tmp/autounattend_{{ item }}.iso"
-            dest: "autounattend_{{ item }}.iso"
-            state: present
-
         - name: Create linked clone {{ clone_base_name }}{{ item }}
           community.general.proxmox_kvm:
             api_host: "{{ proxmox_api_host }}"
@@ -68,8 +64,8 @@
             api_password: "{{ ansible_password }}"
             validate_certs: false
             node: "{{ node }}"
-            vmid: "{{ lookup('community.general.proxmox_vmid', clone_base_name ~ item, api_host=proxmox_api_host, api_user=ansible_user, api_password=ansible_password, validate_certs=false) }}"
-            ide2: "{{ iso_storage }}:iso/autounattend_{{ item }}.iso,media=cdrom"
+            name: "{{ clone_base_name }}{{ item }}"
+            ide2: "{{ iso_storage }}:iso/autounattend.iso,media=cdrom"
             boot: cd
             bootdisk: scsi0
             state: present
