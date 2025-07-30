@@ -1,19 +1,24 @@
-vars:
-  template_name: win-template
-  clone_base_name: templase
-  node: px02
-  count: 3
+---
+- name: Create 3 linked clones from Windows template in Proxmox
+  hosts: proxmox
+  gather_facts: no
 
-tasks:
-  - name: Create linked clones from template
-    community.general.proxmox_kvm:
-      api_host: "{{ proxmox_api_host }}"
-      api_user: "{{ ansible_user }}"
-      api_password: "{{ ansible_password }}"
-      validate_certs: false
-      node: "{{ node }}"
-      name: "{{ clone_base_name }}{{ item }}"
-      clone: "{{ template_name }}"
-      full: false
-      state: present
-    loop: "{{ range(4, 4 + count) | list }}"
+  vars:
+    template_name: win-template
+    clone_base_name: templase
+    node: px02
+    count: 3
+
+  tasks:
+    - name: Create linked clones from template
+      community.general.proxmox_kvm:
+        api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ ansible_user }}"
+        api_password: "{{ ansible_password }}"
+        validate_certs: false
+        node: "{{ node }}"
+        name: "{{ clone_base_name }}{{ item }}"
+        clone: "{{ template_name }}"
+        full: false
+        state: present
+      loop: "{{ range(4, 4 + count) | list }}"
