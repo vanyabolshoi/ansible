@@ -1,0 +1,9 @@
+---
+- name: Запустить видео на Windows
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Запустить видеофайл IMG_6778.MP4 с рабочего стола
+      win_shell: |
+        $videoPath = "C:\Users\vanyabolshoi\Desktop\IMG_6778.MP4"
+        Start-Process -FilePath $videoPath
