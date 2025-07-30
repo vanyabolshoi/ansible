@@ -20,5 +20,5 @@
         name: "{{ clone_base_name }}{{ item }}"
         clone: "{{ template_name }}"
         full: false
-        state: started
+        state: passed
       loop: "{{ range(4, 4 + count) | list }}"
