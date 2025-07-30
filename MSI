@@ -1,0 +1,9 @@
+---
+- name: Установить EncashSetup.msi на Windows
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Запуск MSI установки
+      win_package:
+        path: "C:\\Users\\vanyabolshoi\\Desktop\\EncashSetup.msi"
+        state: present
