@@ -1,3 +1,4 @@
-- name: Добавить правило firewall
-  community.routeros.routeros_firewall_filter:
-    ...
+collections:
+  - name: community.routeros
+  - name: ansible.netcommon
+  - name: ansible.utils
