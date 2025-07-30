@@ -2,3 +2,4 @@ collections:
   - name: community.routeros
   - name: ansible.netcommon
   - name: ansible.utils
+  - name: community.general
