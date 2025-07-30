@@ -1,9 +1,19 @@
 ---
-- name: Установить EncashSetup.msi на Windows
+- name: Установка EncashSetup.msi с логированием
   hosts: windows
   gather_facts: no
   tasks:
-    - name: Запуск MSI установки
-      win_package:
+    - name: Проверка наличия MSI
+      win_stat:
         path: "C:\\Users\\vanyabolshoi\\Desktop\\EncashSetup.msi"
-        state: present
+      register: msi_file
+
+    - name: Установка MSI
+      win_shell: |
+        msiexec.exe /i "C:\Users\vanyabolshoi\Desktop\EncashSetup.msi" /l*v "C:\Windows\Temp\EncashSetup.log" /quiet /norestart
+      when: msi_file.stat.exists
+
+    - name: Вывести результат проверки файла
+      debug:
+        msg: "MSI файл не найден!"
+      when: not msi_file.stat.exists
