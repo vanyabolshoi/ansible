@@ -7,7 +7,7 @@
       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <AutoLogon>
         <Password>
-          <Value>Pharmacia_</Value>
+          <Value>Pharmacia_{{ clone_number }}</Value>
           <PlainText>true</PlainText>
         </Password>
         <Enabled>true</Enabled>
@@ -17,7 +17,7 @@
         <LocalAccounts>
           <LocalAccount wcm:action="add">
             <Password>
-              <Value>Pharmacia_</Value>
+              <Value>Pharmacia_{{ clone_number }}</Value>
               <PlainText>true</PlainText>
             </Password>
             <Description>Автосозданный пользователь</Description>
@@ -34,7 +34,7 @@
         <SkipUserOOBE>true</SkipUserOOBE>
         <SkipMachineOOBE>true</SkipMachineOOBE>
       </OOBE>
-      <RegisteredOwner>Admin</RegisteredOwner>
+      <RegisteredOwner>Admin{{ clone_number }}</RegisteredOwner>
       <RegisteredOrganization>MyOrganization</RegisteredOrganization>
       <TimeZone>UTC</TimeZone>
       <DisableAutoDaylightTimeSet>true</DisableAutoDaylightTimeSet>
