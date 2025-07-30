@@ -21,7 +21,7 @@
       become: yes
 
     - name: Create clones with unattend ISOs
-      include_tasks: create_vm.yml
+      include_tasks: ./create_vm.yml
       loop: "{{ range(4, 4 + count) | list }}"
       loop_control:
         loop_var: clone_number
