@@ -1,0 +1,35 @@
+- name: Create 3 linked clones from Windows template in Proxmox
+  hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_api_user: "ansible@pve"
+    proxmox_api_token: "ansible!ansible"
+    proxmox_api_token_secret: "fa8316cd-d107-43ca-8fe3-b97df5a36774"
+    proxmox_api_host: "172.16.10.5"
+    node: "px02"
+    template_name: "win-template"
+    storage: "VMstorage02"
+    base_vmid: 900  # предполагаем, что шаблон имеет vmid 900
+    clones:
+      - { name: "template4", newid: 904 }
+      - { name: "template5", newid: 905 }
+      - { name: "template6", newid: 906 }
+
+  tasks:
+    - name: Clone Windows VM as linked clones
+      community.general.proxmox_kvm:
+        api_user: "{{ proxmox_api_user }}"
+        api_token_id: "{{ proxmox_api_token }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        api_host: "{{ proxmox_api_host }}"
+        node: "{{ node }}"
+        clone: true
+        vmid: "{{ base_vmid }}"
+        newid: "{{ item.newid }}"
+        name: "{{ item.name }}"
+        target: "{{ node }}"
+        storage: "{{ storage }}"
+        full: false                   # Linked Clone
+        format: raw                  # Или qcow2, если используешь qcow2 диски
+        state: present
+      loop: "{{ clones }}"
