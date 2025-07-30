@@ -4,27 +4,21 @@
   gather_facts: no
 
   vars:
-    vm_template_name: win-template
+    template_vmid: 142
     clone_base_name: templase
     node: px02
-    clone_start_id: 104  # или любой свободный ID
     count: 3
 
   tasks:
-    - name: Generate list of VMIDs to create
-      set_fact:
-        clone_ids: "{{ range(clone_start_id, clone_start_id + count) | list }}"
-
-    - name: Clone Windows VM as linked clones
+    - name: Create linked clones from template
       community.general.proxmox_kvm:
         api_host: "{{ proxmox_api_host }}"
         api_user: "{{ ansible_user }}"
         api_password: "{{ ansible_password }}"
         validate_certs: false
-        vmid: "{{ item }}"
-        name: "{{ clone_base_name }}{{ item - clone_start_id + 4 }}"
         node: "{{ node }}"
-        clone: "{{ vm_template_name }}"
+        name: "{{ clone_base_name }}{{ item }}"
+        clone: "{{ template_vmid }}"
         full: false
         state: present
-      loop: "{{ clone_ids }}"
+      loop: "{{ range(4, 4 + count) | list }}"
