@@ -1,7 +1,5 @@
 git checkout main
-echo "collections:
-  - name: community.routeros
-" > requirements.yml
+echo -e "collections:\n  - name: community.routeros" > requirements.yml
 git add requirements.yml
 git commit -m "Add requirements.yml to install community.routeros collection"
 git push origin main
