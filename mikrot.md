@@ -1,13 +1,8 @@
----
-- name: Настройка MikroTik
-  hosts: mikrotik
+- name: Check ansible version
+  hosts: localhost
   gather_facts: false
-
   tasks:
-    - name: Добавить правило firewall для порта 8080 (TCP)
-      community.routeros.routeros_firewall_filter:
-        chain: input
-        action: accept
-        protocol: tcp
-        dst_port: 8080
-        comment: "Разрешить 8080"
+    - command: ansible --version
+      register: ansible_version
+    - debug:
+        var: ansible_version.stdout_lines
