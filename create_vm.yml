@@ -1,0 +1,59 @@
+---
+- name: Create Autounattend.xml for clone {{ clone_number }}
+  template:
+    src: templates/autounattend.xml.j2
+    dest: "/tmp/autounattend_{{ clone_number }}.xml"
+
+- name: Create ISO with Autounattend.xml for clone {{ clone_number }}
+  command: >
+    genisoimage -o /tmp/autounattend_{{ clone_number }}.iso
+    -V CIDATA -r -J /tmp/autounattend_{{ clone_number }}.xml
+  args:
+    removes: "/tmp/autounattend_{{ clone_number }}.iso"
+
+- name: Upload ISO to Proxmox storage for clone {{ clone_number }}
+  community.general.proxmox_file:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ ansible_user }}"
+    api_password: "{{ ansible_password }}"
+    validate_certs: false
+    node: "{{ node }}"
+    storage: "{{ iso_storage }}"
+    file: "/tmp/autounattend_{{ clone_number }}.iso"
+    dest: "autounattend_{{ clone_number }}.iso"
+    state: present
+
+- name: Create linked clone {{ clone_base_name }}{{ clone_number }}
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ ansible_user }}"
+    api_password: "{{ ansible_password }}"
+    validate_certs: false
+    node: "{{ node }}"
+    name: "{{ clone_base_name }}{{ clone_number }}"
+    clone: "{{ template_name }}"
+    full: false
+    state: present
+
+- name: Attach Autounattend ISO to VM {{ clone_base_name }}{{ clone_number }}
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ ansible_user }}"
+    api_password: "{{ ansible_password }}"
+    validate_certs: false
+    node: "{{ node }}"
+    name: "{{ clone_base_name }}{{ clone_number }}"
+    ide2: "{{ iso_storage }}:iso/autounattend_{{ clone_number }}.iso,media=cdrom"
+    boot: cd
+    bootdisk: scsi0
+    state: present
+
+- name: Start VM {{ clone_base_name }}{{ clone_number }}
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ ansible_user }}"
+    api_password: "{{ ansible_password }}"
+    validate_certs: false
+    node: "{{ node }}"
+    name: "{{ clone_base_name }}{{ clone_number }}"
+    state: started
