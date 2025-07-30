@@ -2,10 +2,12 @@
 - name: Настройка MikroTik
   hosts: mikrotik
   gather_facts: false
+  collections:
+    - community.routeros
 
   tasks:
     - name: Добавить правило firewall для порта 8080 (TCP)
-      community.routeros.routeros_firewall_filter:
+      routeros_firewall_filter:
         chain: input
         action: accept
         protocol: tcp
