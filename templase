@@ -1,29 +1,30 @@
 ---
 - name: Create 3 linked clones from Windows template in Proxmox
-  hosts: localhost
-  gather_facts: false
+  hosts: proxmox
+  gather_facts: no
+
   vars:
     vm_template_name: win-template
+    clone_base_name: templase
     node: px02
-    clone_base_name: template
-    clone_start_id: 904
-    clone_count: 3
+    clone_start_id: 104  # или любой свободный ID
+    count: 3
 
   tasks:
-    - name: Generate list of VMs to create
+    - name: Generate list of VMIDs to create
       set_fact:
-        vm_list: "{{ lookup('sequence', start=clone_start_id, count=clone_count, format='%d') | map('int') | list }}"
+        clone_ids: "{{ range(clone_start_id, clone_start_id + count) | list }}"
 
     - name: Clone Windows VM as linked clones
       community.general.proxmox_kvm:
         api_host: "{{ proxmox_api_host }}"
         api_user: "{{ ansible_user }}"
         api_password: "{{ ansible_password }}"
+        validate_certs: false
         vmid: "{{ item }}"
         name: "{{ clone_base_name }}{{ item - clone_start_id + 4 }}"
         node: "{{ node }}"
         clone: "{{ vm_template_name }}"
-        full: no
+        full: false
         state: present
-        timeout: 300
-      loop: "{{ vm_list }}"
+      loop: "{{ clone_ids }}"
