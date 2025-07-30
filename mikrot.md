@@ -1,8 +1,8 @@
 - name: Открыть порт 8080 на MikroTik
   hosts: mikrotik
+  gather_facts: no
   collections:
     - community.routeros
-  gather_facts: no
   tasks:
     - name: Добавить правило firewall для порта 8080 TCP
       routeros_firewall_filter:
