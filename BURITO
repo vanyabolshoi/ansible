@@ -2,6 +2,11 @@
   hosts: windows
   gather_facts: no
   tasks:
+    - name: Создать папку C:\Temp если не существует
+      win_file:
+        path: C:\Temp
+        state: directory
+
     - name: Создать Powershell скрипт с MessageBox
       win_copy:
         content: |
