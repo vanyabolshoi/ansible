@@ -1,0 +1,47 @@
+---
+- name: Загрузка, установка и проверка EncashSetup.msi с GitHub
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Скачать EncashSetup.msi с GitHub
+      win_get_url:
+        url: "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/EncashSetup.msi"
+        dest: "C:\\Windows\\Temp\\EncashSetup.msi"
+        force: yes
+
+    - name: Проверить наличие MSI файла
+      win_stat:
+        path: "C:\\Windows\\Temp\\EncashSetup.msi"
+      register: msi_file
+
+    - name: Установить MSI пакет
+      win_shell: |
+        msiexec.exe /i "C:\Windows\Temp\EncashSetup.msi" /quiet /norestart /l*v "C:\Windows\Temp\EncashSetup.log"
+      when: msi_file.stat.exists
+
+    - name: Проверить, что продукт установлен (через реестр)
+      win_reg_stat:
+        path: "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall"
+        # или для 64-битных приложений
+        # path: "HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall"
+        recurse: yes
+      register: uninstall_keys
+
+    - name: Найти ключ с именем продукта Encash
+      set_fact:
+        product_installed: "{{ uninstall_keys.reg_keys | selectattr('DisplayName', 'search', 'Encash') | list | length > 0 }}"
+
+    - name: Вывести сообщение об успешной установке
+      debug:
+        msg: "✅ Продукт Encash успешно установлен."
+      when: product_installed
+
+    - name: Вывести предупреждение, если продукт не найден в реестре
+      debug:
+        msg: "⚠️ Продукт Encash не найден в списке установленных программ."
+      when: not product_installed
+
+    - name: Вывести предупреждение, если MSI файл не найден
+      debug:
+        msg: "⚠️ Файл EncashSetup.msi не найден. Установка не выполнена."
+      when: not msi_file.stat.exists
