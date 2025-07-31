@@ -1,0 +1,9 @@
+---
+- name: Шутка с окном "ПОШЛИ ПОЕДИМ БУРИТО"
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Показать шутливое всплывающее окно пользователю
+      win_shell: |
+        Add-Type -AssemblyName PresentationFramework
+        [System.Windows.MessageBox]::Show('ПОШЛИ ПОЕДИМ БУРИТО','Шутка от администратора')
