@@ -1,0 +1,73 @@
+- name: Загрузка, установка и проверка EncashSetup.msi с GitHub
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Скачать EncashSetup.msi с GitHub
+      win_get_url:
+        url: "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/EncashSetup.msi"
+        dest: "C:\\Windows\\Temp\\EncashSetup.msi"
+        force: yes
+      register: download_result
+      retries: 3
+      delay: 5
+      until: download_result is succeeded
+      ignore_unreachable: true
+
+    - name: Проверить наличие MSI файла
+      win_stat:
+        path: "C:\\Windows\\Temp\\EncashSetup.msi"
+      register: msi_file
+
+    - name: Установить MSI пакет
+      win_shell: |
+        msiexec.exe /i "C:\Windows\Temp\EncashSetup.msi" /quiet /norestart /l*v "C:\Windows\Temp\EncashSetup.log"
+      when: msi_file.stat.exists
+      register: install_result
+
+    - name: Проверить, что продукт установлен (через реестр)
+      win_reg_stat:
+        path: "{{ item }}"
+        recurse: yes
+      register: uninstall_keys
+      loop:
+        - "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall"
+        - "HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall"
+
+    - name: Найти ключ с именем продукта Encash
+      set_fact:
+        product_installed: "{{ uninstall_keys.results | selectattr('reg_keys', 'defined') | map(attribute='reg_keys') | flatten | selectattr('DisplayName', 'search', 'Encash') | list | length > 0 }}"
+
+    - name: Вывести сообщение об успешной установке
+      debug:
+        msg: "✅ Продукт Encash успешно установлен."
+      when: product_installed
+
+    - name: Вывести предупреждение, если продукт не найден в реестре
+      debug:
+        msg: "⚠️ Продукт Encash не найден в списке установленных программ."
+      when: not product_installed
+
+    - name: Вывести предупреждение, если MSI файл не найден
+      debug:
+        msg: "⚠️ Файл EncashSetup.msi не найден. Установка не выполнена."
+      when: not msi_file.stat.exists
+
+    - name: Сформировать и вывести отчёт по всем хостам на экран
+      debug:
+        msg: |
+          === Отчёт по выполнению задачи на {{ ansible_date_time.iso8601 }} ===
+          - Всего хостов: {{ play_hosts | length }}
+          - Успешно (ok): {{ hostvars | dict2items | selectattr('value.ansible_facts.ansible_ok', 'defined') | selectattr('value.ansible_facts.ansible_ok') | list | length }}
+          - Изменено (changed): {{ hostvars | dict2items | selectattr('value.ansible_facts.ansible_changed', 'defined') | selectattr('value.ansible_facts.ansible_changed') | list | length }}
+          - Недоступно (unreachable): {{ hostvars | dict2items | selectattr('value.ansible_facts.ansible_unreachable', 'defined') | selectattr('value.ansible_facts.ansible_unreachable') | list | length }}
+          - Подробности по хостам:
+            {% for host in play_hosts %}
+            - {{ host }}: 
+              {% if hostvars[host].ansible_facts.ansible_ok is defined and hostvars[host].ansible_facts.ansible_ok %} Успешно
+              {% elif hostvars[host].ansible_facts.ansible_changed is defined and hostvars[host].ansible_facts.ansible_changed %} Изменено
+              {% elif hostvars[host].ansible_facts.ansible_unreachable is defined and hostvars[host].ansible_facts.ansible_unreachable %} Недоступно
+              {% else %} Неизвестно
+              {% endif %}
+            {% endfor %}
+        verbosity: 0
+      run_once: yes
