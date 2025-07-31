@@ -1,9 +1,21 @@
----
-- name: Шутка с окном "ПОШЛИ ПОЕДИМ БУРИТО"
+- name: Запустить интерактивное окно "ПОШЛИ ПОЕДИМ БУРИТО" немедленно
   hosts: windows
   gather_facts: no
   tasks:
-    - name: Показать шутливое всплывающее окно пользователю
+    - name: Создать Powershell скрипт с MessageBox
+      win_copy:
+        content: |
+          Add-Type -AssemblyName PresentationFramework
+          [System.Windows.MessageBox]::Show('ПОШЛИ ПОЕДИМ БУРИТО','Шутка от администратора')
+        dest: C:\Temp\show_burrito.ps1
+
+    - name: Создать задачу планировщика для запуска скрипта от пользователя
       win_shell: |
-        Add-Type -AssemblyName PresentationFramework
-        [System.Windows.MessageBox]::Show('ПОШЛИ ПОЕДИМ БУРИТО','Шутка от администратора')
+        schtasks /Create /TN "ShowBurritoNow" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Temp\show_burrito.ps1" /SC ONCE /ST 00:00 /RL HIGHEST /F /RU "FARM\vanyabolshoi" /IT
+      args:
+        executable: cmd
+
+    - name: Запустить задачу немедленно
+      win_shell: schtasks /Run /TN "ShowBurritoNow"
+      args:
+        executable: cmd
