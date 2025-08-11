@@ -1,9 +1,0 @@
----
-- name: Создать папку на рабочем столе пользователя vanyabolshoi
-  hosts: windows
-  gather_facts: no
-  tasks:
-    - name: Создать папку MyNewFolder на рабочем столе
-      win_file:
-        path: "C:\\Users\\vanyabolshoi\\Desktop\\MyNewFolder"
-        state: directory

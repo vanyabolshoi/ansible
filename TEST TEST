@@ -1,0 +1,7 @@
+---
+- name: Проверка доступности Windows-хостов для работы с Ansible
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Проверить подключение к Windows через WinRM
+      win_ping:
