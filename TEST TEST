@@ -1,53 +1,31 @@
 ---
-- name: Проверка доступности Windows 10 по WinRM (порт 5986)
+- name: Проверка доступности Windows-хостов по ping
   hosts: localhost
   gather_facts: no
   vars:
-    winrm_hosts: "{{ groups['windows'] if 'windows' in groups else [] }}"
+    winrm_hosts: "{{ groups['windows'] }}"
 
   tasks:
-    - name: Проверка доступности по ping (ICMP)
+    - name: Проверка доступности по ping (ICMP) с делегированием на каждый хост
       ansible.builtin.ping:
       delegate_to: "{{ item }}"
       register: ping_results
       ignore_errors: yes
       loop: "{{ winrm_hosts }}"
 
-    - name: Проверка TCP порта 5986 (WinRM HTTPS)
-      wait_for:
-        host: "{{ item }}"
-        port: 5986
-        timeout: 3
-      register: winrm_port_check
-      ignore_errors: yes
-      loop: "{{ winrm_hosts }}"
+    - name: Отладка результата ping
+      debug:
+        var: ping_results
 
     - name: Сформировать списки reachable и unreachable по ping
       set_fact:
         reachable_hosts: "{{ ping_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
         unreachable_hosts: "{{ ping_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
 
-    - name: Сформировать списки с открытым и закрытым WinRM портом
-      set_fact:
-        winrm_open_hosts: "{{ winrm_port_check.results | selectattr('state', 'equalto', 'started') | map(attribute='item') | list }}"
-        winrm_closed_hosts: "{{ winrm_port_check.results | selectattr('state', 'ne', 'started') | map(attribute='item') | list }}"
-
-    - name: Проверить WinRM (win_command hostname) на reachable с открытым портом WinRM
-      win_command: hostname
-      delegate_to: "{{ item }}"
-      register: winrm_check_results
-      ignore_errors: yes
-      loop: "{{ reachable_hosts | intersect(winrm_open_hosts) }}"
-
-    - name: Сформировать финальные списки WinRM
-      set_fact:
-        winrm_ok: "{{ winrm_check_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
-        winrm_fail: "{{ winrm_check_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
-        no_winrm: "{{ reachable_hosts | difference(winrm_open_hosts) }}"
-
-    - name: Вывести итоговые результаты
+    - name: Вывести reachable hosts
       debug:
-        msg: |
-          Полностью рабочий WinRM: {{ winrm_ok }}
-          Узлы доступны (ping), но WinRM не отвечает: {{ (winrm_fail + no_winrm) | unique }}
-          Узлы недоступны (ping не проходит): {{ unreachable_hosts }}
+        msg: "Reachable hosts: {{ reachable_hosts }}"
+
+    - name: Вывести unreachable hosts
+      debug:
+        msg: "Unreachable hosts: {{ unreachable_hosts }}"
