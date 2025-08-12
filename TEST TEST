@@ -16,41 +16,34 @@
       register: winrm_check
       ignore_errors: yes
 
-    - name: Отправить статус WinRM в localhost
-      local_action:
-        module: set_fact
-        host_winrm_status: "{{ 'reachable' if winrm_check.ping is defined else 'unreachable' }}"
-      delegate_to: localhost
-      run_once: false
-
-    - name: Сохранить статус в переменную хоста
+    - name: Установить статус WinRM
       set_fact:
         winrm_status: "{{ 'reachable' if winrm_check.ping is defined else 'unreachable' }}"
 
-- name: Сбор и вывод результатов на localhost
+- name: Вывод итогов на localhost
   hosts: localhost
   gather_facts: no
   tasks:
     - name: Собрать reachable hosts
       set_fact:
         reachable_hosts: >-
-          {{ groups['windows']
+          {{ groups['windows'] 
              | select('extract', hostvars, 'winrm_status')
-             | select('equalto', 'reachable')
+             | select('equalto', 'reachable') 
              | list }}
 
     - name: Собрать unreachable hosts
       set_fact:
         unreachable_hosts: >-
-          {{ groups['windows']
+          {{ groups['windows'] 
              | select('extract', hostvars, 'winrm_status')
-             | select('equalto', 'unreachable')
+             | select('equalto', 'unreachable') 
              | list }}
 
-    - name: Вывести reachable hosts
+    - name: Вывести список reachable
       debug:
-        msg: "Доступен WinRM на хостах: {{ reachable_hosts }}"
+        msg: "WinRM доступен на хостах: {{ reachable_hosts }}"
 
-    - name: Вывести unreachable hosts
+    - name: Вывести список unreachable
       debug:
         msg: "WinRM недоступен на хостах: {{ unreachable_hosts }}"
