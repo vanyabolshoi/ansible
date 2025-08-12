@@ -3,10 +3,10 @@
   hosts: localhost
   gather_facts: no
   vars:
-    winrm_hosts: "{{ groups['winrm_hosts'] if 'winrm_hosts' in groups else [] }}"
+    winrm_hosts: "{{ groups['windows'] if 'windows' in groups else [] }}"
 
   tasks:
-    - name: Вывести список хостов из группы winrm_hosts
+    - name: Вывести список хостов из группы windows
       debug:
         var: winrm_hosts
 
@@ -30,13 +30,13 @@
       register: winrm_results
       ignore_errors: yes
       loop: "{{ reachable_ips }}"
-      when: reachable_ips | length > 0
+      when: reachable_ips is defined and reachable_ips | length > 0
 
     - name: Сформировать списки с работающим и неработающим WinRM
       set_fact:
         winrm_ok: "{{ winrm_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
         winrm_failed: "{{ winrm_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
-      when: reachable_ips | length > 0
+      when: winrm_results is defined
 
     - name: Вывести результаты проверки
       debug:
