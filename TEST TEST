@@ -4,7 +4,7 @@
   gather_facts: no
   tasks:
     - name: Проверка ICMP доступности
-      ansible.windows.win_shell: |
+      win_shell: |
         Test-Connection -ComputerName $env:COMPUTERNAME -Count 1 -Quiet
       register: icmp_check
       ignore_errors: yes
@@ -15,42 +15,39 @@
       ignore_errors: yes
       when: icmp_check.rc == 0 or icmp_check.stdout == "True"
 
-    - name: Классификация — все супер
+    - name: Определить статус
       set_fact:
-        status: "Все супер"
-      when: winrm_check.ping is defined and winrm_check.ping == "pong"
+        status: >-
+          {% if winrm_check.ping is defined and winrm_check.ping == "pong" %}
+            super
+          {% elif icmp_check.rc == 0 or icmp_check.stdout == "True" %}
+            no_manage
+          {% else %}
+            unreachable
+          {% endif %}
 
-    - name: Классификация — доступен, но управление невозможно
-      set_fact:
-        status: "Доступен, но управление невозможно"
-      when:
-        - (icmp_check.rc == 0 or icmp_check.stdout == "True")
-        - status is not defined
-
-    - name: Классификация — недоступен априори
-      set_fact:
-        status: "Недоступен априори"
-      when:
-        - status is not defined
-
-    - name: Сохранить статус
+    - name: Сохранить статус в общий словарь
       set_fact:
         host_statuses: "{{ host_statuses | default({}) | combine({inventory_hostname: status}) }}"
       run_once: true
       delegate_to: localhost
 
-- name: Вывод статистики
+- name: Вывод итоговой статистики
   hosts: localhost
   gather_facts: no
   vars:
     host_statuses: "{{ hostvars | dict2items | selectattr('value.host_statuses', 'defined') | map(attribute='value.host_statuses') | first }}"
   tasks:
-    - name: Все супер
+    - name: Подсчет статистики
+      set_fact:
+        total_hosts: "{{ host_statuses | length }}"
+        count_super: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'super') | list | length }}"
+        count_no_manage: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | list | length }}"
+        count_unreachable: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | list | length }}"
+
+    - name: Показать статистику
       debug:
-        msg: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'Все супер') | map(attribute='key') | list }}"
-    - name: Доступен, но управление невозможно
-      debug:
-        msg: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'Доступен, но управление невозможно') | map(attribute='key') | list }}"
-    - name: Недоступен априори
-      debug:
-        msg: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'Недоступен априори') | map(attribute='key') | list }}"
+        msg:
+          - "Все супер:  {{ count_super }} ({{ ((count_super | float / total_hosts) * 100) | round(1) }}%)"
+          - "Доступен, но управление невозможно:  {{ count_no_manage }} ({{ ((count_no_manage | float / total_hosts) * 100) | round(1) }}%)"
+          - "Недоступен априори:  {{ count_unreachable }} ({{ ((count_unreachable | float / total_hosts) * 100) | round(1) }}%)"
