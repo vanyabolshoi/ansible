@@ -9,7 +9,7 @@
 
     - name: Проверить доступность WinRM
       win_ping:
-      when: port_check.rc == 0 and port_check.stdout is search("TcpTestSucceeded : True")
+      when: port_check.rc == 0 and port_check.stdout | search("TcpTestSucceeded : True")
       register: winrm_check
       ignore_errors: yes
 
