@@ -1,47 +1,34 @@
 ---
-- name: Проверка WinRM доступности хостов из инвентаря
+- name: Проверка доступности WinRM и ping по списку hosts
   hosts: localhost
   gather_facts: no
   vars:
     winrm_hosts: "{{ groups['windows'] if 'windows' in groups else [] }}"
 
   tasks:
-    - name: Вывести список хостов из группы windows
-      debug:
-        var: winrm_hosts
-
-    - name: Проверить доступность хостов по ICMP ping
+    - name: Проверка ping
       ansible.builtin.ping:
       delegate_to: "{{ item }}"
-      register: ping_results
+      register: ping_result
       ignore_errors: yes
       loop: "{{ winrm_hosts }}"
-      when: winrm_hosts | length > 0
 
-    - name: Сформировать списки reachable и unreachable по ping
-      set_fact:
-        reachable_ips: "{{ ping_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
-        unreachable_ips: "{{ ping_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
-      when: winrm_hosts | length > 0
-
-    - name: Проверить WinRM доступность на reachable узлах
+    - name: Проверка WinRM (win_command hostname) на reachable по ping
       win_command: hostname
-      delegate_to: "{{ item }}"
-      register: winrm_results
+      delegate_to: "{{ item.item }}"
+      register: winrm_result
       ignore_errors: yes
-      loop: "{{ reachable_ips }}"
-      when: reachable_ips is defined and reachable_ips | length > 0
+      loop: "{{ ping_result.results | selectattr('failed', 'equalto', false) | list }}"
 
-    - name: Сформировать списки с работающим и неработающим WinRM
-      set_fact:
-        winrm_ok: "{{ winrm_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
-        winrm_failed: "{{ winrm_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
-      when: winrm_results is defined
-
-    - name: Вывести результаты проверки
+    - name: Собрать и вывести итог по каждому хосту
+      vars:
+        ping_ok: "{{ ping_result.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
+        ping_fail: "{{ ping_result.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
+        winrm_ok: "{{ winrm_result.results | selectattr('failed', 'equalto', false) | map(attribute='item.item') | list }}"
+        winrm_fail: "{{ winrm_result.results | selectattr('failed', 'equalto', true) | map(attribute='item.item') | list }}"
       debug:
         msg: |
-          Полностью рабочий WinRM: {{ winrm_ok | default([]) }}
-          Узлы доступны, но WinRM не настроен: {{ winrm_failed | default([]) }}
-          Узлы недоступны (ping не проходит): {{ unreachable_ips | default([]) }}
-      when: winrm_hosts | length > 0
+          Доступные по ping: {{ ping_ok }}
+          Недоступные по ping: {{ ping_fail }}
+          Доступные по WinRM: {{ winrm_ok }}
+          Недоступные по WinRM (но доступны по ping): {{ winrm_fail }}
