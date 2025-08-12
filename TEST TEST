@@ -1,6 +1,24 @@
-- name: Проверка WinRM доступности Windows-хостов
-  hosts: windows_hosts
+- name: Проверка WinRM и Windows-машин из инвентаря
+  hosts: all
   gather_facts: false
   tasks:
-    - name: Проверить доступность WinRM
+    - name: Проверить WinRM (для групп с Windows)
       win_ping:
+      register: winrm_check
+      ignore_errors: true
+      when: "'windows' in group_names"
+
+    - name: Проверить порт 445 (SMB) на всех хостах
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 445
+        timeout: 3
+      register: smb_check
+      ignore_errors: true
+
+    - name: Вывести результаты для каждого хоста
+      debug:
+        msg: >
+          Хост {{ inventory_hostname }}:
+          WinRM работает: {{ winrm_check is defined and winrm_check.ping is defined }},
+          SMB порт 445 открыт: {{ smb_check.elapsed is defined }}
