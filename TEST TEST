@@ -1,34 +1,16 @@
 ---
-- name: Проверка доступности WinRM и ping по списку hosts
-  hosts: localhost
+- name: Проверка доступности WinRM на Windows-хостах
+  hosts: windows
   gather_facts: no
-  vars:
-    winrm_hosts: "{{ groups['windows'] if 'windows' in groups else [] }}"
 
   tasks:
-    - name: Проверка ping
-      ansible.builtin.ping:
-      delegate_to: "{{ item }}"
-      register: ping_result
-      ignore_errors: yes
-      loop: "{{ winrm_hosts }}"
-
-    - name: Проверка WinRM (win_command hostname) на reachable по ping
+    - name: Проверка WinRM - выполнить hostname
       win_command: hostname
-      delegate_to: "{{ item.item }}"
       register: winrm_result
       ignore_errors: yes
-      loop: "{{ ping_result.results | selectattr('failed', 'equalto', false) | list }}"
 
-    - name: Собрать и вывести итог по каждому хосту
-      vars:
-        ping_ok: "{{ ping_result.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
-        ping_fail: "{{ ping_result.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
-        winrm_ok: "{{ winrm_result.results | selectattr('failed', 'equalto', false) | map(attribute='item.item') | list }}"
-        winrm_fail: "{{ winrm_result.results | selectattr('failed', 'equalto', true) | map(attribute='item.item') | list }}"
+    - name: Вывести статус узла
       debug:
-        msg: |
-          Доступные по ping: {{ ping_ok }}
-          Недоступные по ping: {{ ping_fail }}
-          Доступные по WinRM: {{ winrm_ok }}
-          Недоступные по WinRM (но доступны по ping): {{ winrm_fail }}
+        msg: >
+          {{ inventory_hostname }}: {{
+            'WinRM доступен' if not winrm_result.failed else 'WinRM недоступен или ошибка' }}
