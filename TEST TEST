@@ -1,3 +1,4 @@
+---
 - name: Проверка доступности Windows-хостов
   hosts: windows
   gather_facts: no
@@ -23,6 +24,11 @@
           {% else %}
             unreachable
           {% endif %}
+
+    - name: Установить статус unreachable, если статус не установлен
+      set_fact:
+        status: unreachable
+      when: status is not defined
 
 - name: Итоговая статистика
   hosts: localhost
