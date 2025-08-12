@@ -3,19 +3,20 @@
   gather_facts: no
   tasks:
     - name: Проверить доступность порта 5986
-      wait_for:
-        port: 5986
-        host: "{{ inventory_hostname }}"
-        timeout: 3
+      win_shell: Test-NetConnection -ComputerName "{{ inventory_hostname }}" -Port 5986
       register: port_check
       ignore_errors: yes
 
     - name: Проверить доступность WinRM
       win_ping:
-      when: port_check is succeeded
+      when: port_check.rc == 0 and port_check.stdout is search("TcpTestSucceeded : True")
       register: winrm_check
       ignore_errors: yes
 
     - name: Установить статус WinRM
       set_fact:
         winrm_status: "{{ 'reachable' if (winrm_check is defined and winrm_check.ping is defined) else 'unreachable' }}"
+
+    - name: Вывести статус WinRM
+      debug:
+        msg: "WinRM status for {{ inventory_hostname }}: {{ winrm_status }}"
