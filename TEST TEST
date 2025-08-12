@@ -2,9 +2,15 @@
 - name: Проверка доступности Windows-хостов
   hosts: windows
   gather_facts: no
+  vars:
+    ansible_winrm_server_cert_validation: ignore
   tasks:
-    - name: Проверка ICMP
-      win_shell: Test-Connection -ComputerName $env:COMPUTERNAME -Count 1 -Quiet
+    - name: Проверка ICMP (ping) с localhost к хосту
+      delegate_to: localhost
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 5985
+        timeout: 3
       register: icmp_check
       ignore_errors: yes
 
@@ -12,54 +18,37 @@
       win_ping:
       register: winrm_check
       ignore_errors: yes
-      when: icmp_check.rc == 0 or icmp_check.stdout == "True"
 
     - name: Присвоить статус
       set_fact:
         status: >-
           {% if winrm_check is defined and winrm_check.ping == "pong" %}
             reachable
-          {% elif icmp_check.rc == 0 or icmp_check.stdout == "True" %}
+          {% elif icmp_check is defined and icmp_check.elapsed is defined %}
             no_manage
           {% else %}
             unreachable
           {% endif %}
+      cacheable: yes  # Важно, чтобы статус остался доступен для следующего play
 
 - name: Классификация хостов по статусам
   hosts: localhost
   gather_facts: no
   tasks:
-    - name: Собрать статусы reachable-хостов
+    - name: Собрать статусы хостов
       set_fact:
         host_statuses: >-
           {{
             groups['windows']
             | map('extract', hostvars, 'status')
             | zip(groups['windows'])
-            | items2dict(key_name=1, value_name=0)
+            | map('reverse')
+            | items2dict()
           }}
 
-    - name: Добавить unreachable хосты (без статуса)
-      set_fact:
-        host_statuses: >-
-          {{
-            host_statuses
-            | combine(
-                dict(
-                  (item, 'unreachable') for item in groups['windows'] if item not in host_statuses
-                )
-              )
-          }}
-
-    - name: Получить списки IP по статусам
-      set_fact:
-        reachable_hosts: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'reachable') | map(attribute='key') | list }}"
-        no_manage_hosts: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | map(attribute='key') | list }}"
-        unreachable_hosts: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | map(attribute='key') | list }}"
-
-    - name: Вывести результаты
+    - name: Вывести списки по статусам
       debug:
         msg: |
-          Reachable (WinRM OK): {{ reachable_hosts | join(', ') }}
-          No manage (Ping OK, WinRM FAIL): {{ no_manage_hosts | join(', ') }}
-          Unreachable (No Ping): {{ unreachable_hosts | join(', ') }}
+          Reachable (WinRM OK): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'reachable') | map(attribute='key') | list | join(', ') }}
+          No manage (Ping OK, WinRM FAIL): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | map(attribute='key') | list | join(', ') }}
+          Unreachable (No Ping): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | map(attribute='key') | list | join(', ') }}
