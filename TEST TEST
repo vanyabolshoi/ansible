@@ -14,8 +14,7 @@
         failed_hosts: "{{ failed_hosts + [inventory_hostname] }}"
       when: winrm_result is failed or winrm_result is unreachable
 
-  # В конце выводим список неудачных хостов
-  - name: Вывести список хостов, где не прошла проверка WinRM
-    debug:
-      msg: "WinRM не доступен на хостах: {{ failed_hosts }}"
-    run_once: true
+    - name: Вывести список хостов, где не прошла проверка WinRM
+      debug:
+        msg: "WinRM не доступен на хостах: {{ failed_hosts }}"
+      run_once: true
