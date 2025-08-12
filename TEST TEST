@@ -40,14 +40,14 @@
   tasks:
     - name: Подсчет статистики
       set_fact:
-        total: "{{ host_statuses | length }}"
-        count_super: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'super') | list | length }}"
-        count_no_manage: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | list | length }}"
-        count_unreachable: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | list | length }}"
+        total: "{{ host_statuses | length | int }}"
+        count_super: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'super') | list | length | int }}"
+        count_no_manage: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | list | length | int }}"
+        count_unreachable: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | list | length | int }}"
 
     - name: Вывести статистику
       debug:
         msg: |
-          Все супер:  {{ count_super }} ({{ ((count_super | float / total) * 100) | round(1) }}%)
-          Доступен, но управление невозможно:  {{ count_no_manage }} ({{ ((count_no_manage | float / total) * 100) | round(1) }}%)
-          Недоступен априори:  {{ count_unreachable }} ({{ ((count_unreachable | float / total) * 100) | round(1) }}%)
+          Все супер:  {{ count_super }} ({{ ((count_super | float) / (total | float) * 100) | round(1) }}%)
+          Доступен, но управление невозможно:  {{ count_no_manage }} ({{ ((count_no_manage | float) / (total | float) * 100) | round(1) }}%)
+          Недоступен априори:  {{ count_unreachable }} ({{ ((count_unreachable | float) / (total | float) * 100) | round(1) }}%)
