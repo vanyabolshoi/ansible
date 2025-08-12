@@ -1,25 +1,53 @@
 ---
 - name: Проверка доступности WinRM на Windows-хостах
   hosts: windows
-  gather_facts: false
-  tasks:
+  gather_facts: no
+  vars:
+    ansible_user: admin
+    ansible_password: Pharmacia_
+    ansible_connection: winrm
+    ansible_winrm_transport: ntlm
+    ansible_winrm_server_cert_validation: ignore
+    ansible_port: 5986
 
+  tasks:
     - name: Проверить доступность WinRM
       win_ping:
-      register: ping_result
+      register: winrm_check
       ignore_errors: yes
 
     - name: Пометить хосты reachable/unreachable (локально)
       set_fact:
-        winrm_status: "{{ 'reachable' if ping_result is succeeded else 'unreachable' }}"
+        winrm_status: "{{ 'reachable' if winrm_check.ping is defined else 'unreachable' }}"
 
-    - name: Сбор данных о статусе по всем хостам (локально)
-      run_once: true
-      delegate_to: localhost
-      vars:
-        reachable_hosts: "{{ groups['windows'] | select('match', '.*') | select('extract', hostvars, 'winrm_status') | select('equalto', 'reachable') | list }}"
-        unreachable_hosts: "{{ groups['windows'] | select('match', '.*') | select('extract', hostvars, 'winrm_status') | select('equalto', 'unreachable') | list }}"
+- name: Сбор и вывод результатов на localhost
+  hosts: localhost
+  gather_facts: no
+  vars:
+    windows_hosts: "{{ groups['windows'] }}"
+  tasks:
+    - name: Собрать reachable hosts
+      set_fact:
+        reachable_hosts: >-
+          {{ windows_hosts
+             | zip(windows_hosts | map('extract', hostvars, 'winrm_status'))
+             | selectattr('1', 'equalto', 'reachable')
+             | map('first')
+             | list }}
+
+    - name: Собрать unreachable hosts
+      set_fact:
+        unreachable_hosts: >-
+          {{ windows_hosts
+             | zip(windows_hosts | map('extract', hostvars, 'winrm_status'))
+             | selectattr('1', 'equalto', 'unreachable')
+             | map('first')
+             | list }}
+
+    - name: Вывести reachable hosts
       debug:
-        msg:
-          - "Доступен WinRM на хостах: {{ reachable_hosts }}"
-          - "WinRM недоступен на хостах: {{ unreachable_hosts }}"
+        msg: "Доступен WinRM на хостах: {{ reachable_hosts }}"
+
+    - name: Вывести unreachable hosts
+      debug:
+        msg: "WinRM недоступен на хостах: {{ unreachable_hosts }}"
