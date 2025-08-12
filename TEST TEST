@@ -1,35 +1,6 @@
----
-- name: Проверка доступности Windows-хостов по ping
-  hosts: localhost
-  gather_facts: no
-  vars:
-    winrm_hosts: "{{ groups['windows'] }}"
-
+- name: Проверка WinRM доступности Windows-хостов
+  hosts: windows_hosts
+  gather_facts: false
   tasks:
-    - name: Проверка доступности по ping (ICMP) с делегированием на каждый хост
-      ansible.builtin.ping:
-      delegate_to: "{{ item }}"
-      register: ping_results
-      ignore_errors: yes
-      loop: "{{ winrm_hosts }}"
-
-    - name: Сформировать списки reachable и unreachable по ping
-      set_fact:
-        reachable_hosts: >-
-          {{ ping_results.results
-             | selectattr('failed', 'defined')
-             | selectattr('failed', 'equalto', false)
-             | map(attribute='item') | list }}
-        unreachable_hosts: >-
-          {{ ping_results.results
-             | selectattr('failed', 'defined')
-             | selectattr('failed', 'equalto', true)
-             | map(attribute='item') | list }}
-
-    - name: Вывести reachable hosts
-      debug:
-        msg: "Reachable hosts: {{ reachable_hosts }}"
-
-    - name: Вывести unreachable hosts
-      debug:
-        msg: "Unreachable hosts: {{ unreachable_hosts }}"
+    - name: Проверить доступность WinRM
+      win_ping:
