@@ -1,16 +1,49 @@
 ---
-- name: Проверка доступности WinRM на Windows-хостах
-  hosts: windows
+- name: Проверка доступности Windows-хостов и WinRM
+  hosts: localhost
   gather_facts: no
+  vars:
+    winrm_hosts: "{{ groups['windows'] if 'windows' in groups else [] }}"
 
   tasks:
-    - name: Проверка WinRM - выполнить hostname
-      win_command: hostname
-      register: winrm_result
+    - name: Проверка доступности по TCP 5986 (WinRM)
+      wait_for:
+        host: "{{ item }}"
+        port: 5986
+        timeout: 3
+      register: winrm_port_check
       ignore_errors: yes
+      loop: "{{ winrm_hosts }}"
 
-    - name: Вывести статус узла
+    - name: Проверка доступности по ping (ICMP)
+      ansible.builtin.ping:
+      delegate_to: "{{ item }}"
+      register: ping_results
+      ignore_errors: yes
+      loop: "{{ winrm_hosts }}"
+
+    - name: Сформировать списки
+      set_fact:
+        reachable_hosts: "{{ ping_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
+        unreachable_hosts: "{{ ping_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
+        winrm_open_hosts: "{{ winrm_port_check.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
+        winrm_closed_hosts: "{{ winrm_port_check.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
+
+    - name: Проверить WinRM на reachable и с открытым портом 5986
+      win_command: hostname
+      delegate_to: "{{ item }}"
+      register: winrm_check_results
+      ignore_errors: yes
+      loop: "{{ reachable_hosts | intersect(winrm_open_hosts) }}"
+
+    - name: Сформировать финальные списки
+      set_fact:
+        winrm_ok: "{{ winrm_check_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
+        winrm_fail: "{{ winrm_check_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
+
+    - name: Вывести результаты
       debug:
-        msg: >
-          {{ inventory_hostname }}: {{
-            'WinRM доступен' if not winrm_result.failed else 'WinRM недоступен или ошибка' }}
+        msg: |
+          Полностью рабочий WinRM: {{ winrm_ok }}
+          Узлы доступны (ping), но WinRM не отвечает: {{ winrm_fail + winrm_closed_hosts | unique }}
+          Узлы недоступны (ping не проходит): {{ unreachable_hosts }}
