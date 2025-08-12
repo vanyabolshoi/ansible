@@ -4,7 +4,7 @@
     failed_hosts: []
 
   tasks:
-    - name: Проверка WinRM с обработкой ошибок
+    - name: Проверить доступность WinRM с обработкой ошибок
       block:
         - win_ping:
       rescue:
