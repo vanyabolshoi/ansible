@@ -4,17 +4,17 @@
     failed_hosts: []
 
   tasks:
-    - name: Проверить доступность WinRM
+    - name: Проверить доступность WinRM (win_ping)
       win_ping:
       register: winrm_result
       ignore_errors: yes
 
-    - name: Собрать хосты с ошибкой WinRM
+    - name: Добавить хост в список failed_hosts, если проверка не прошла
       set_fact:
         failed_hosts: "{{ failed_hosts + [inventory_hostname] }}"
       when: winrm_result is failed or winrm_result is unreachable
 
     - name: Вывести список хостов, где не прошла проверка WinRM
       debug:
-        msg: "WinRM не доступен на хостах: {{ failed_hosts }}"
+        msg: "WinRM недоступен на хостах: {{ failed_hosts }}"
       run_once: true
