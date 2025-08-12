@@ -13,14 +13,18 @@
       ignore_errors: yes
       loop: "{{ winrm_hosts }}"
 
-    - name: Отладка результата ping
-      debug:
-        var: ping_results
-
     - name: Сформировать списки reachable и unreachable по ping
       set_fact:
-        reachable_hosts: "{{ ping_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
-        unreachable_hosts: "{{ ping_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
+        reachable_hosts: >-
+          {{ ping_results.results
+             | selectattr('failed', 'defined')
+             | selectattr('failed', 'equalto', false)
+             | map(attribute='item') | list }}
+        unreachable_hosts: >-
+          {{ ping_results.results
+             | selectattr('failed', 'defined')
+             | selectattr('failed', 'equalto', true)
+             | map(attribute='item') | list }}
 
     - name: Вывести reachable hosts
       debug:
