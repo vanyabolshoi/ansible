@@ -3,20 +3,26 @@
   hosts: localhost
   gather_facts: no
   vars:
-    winrm_hosts: "{{ groups['winrm_hosts'] }}"
+    winrm_hosts: "{{ groups['winrm_hosts'] if 'winrm_hosts' in groups else [] }}"
 
   tasks:
+    - name: Вывести список хостов из группы winrm_hosts
+      debug:
+        var: winrm_hosts
+
     - name: Проверить доступность хостов по ICMP ping
       ansible.builtin.ping:
       delegate_to: "{{ item }}"
       register: ping_results
       ignore_errors: yes
       loop: "{{ winrm_hosts }}"
+      when: winrm_hosts | length > 0
 
     - name: Сформировать списки reachable и unreachable по ping
       set_fact:
         reachable_ips: "{{ ping_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
         unreachable_ips: "{{ ping_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
+      when: winrm_hosts | length > 0
 
     - name: Проверить WinRM доступность на reachable узлах
       win_command: hostname
@@ -24,15 +30,18 @@
       register: winrm_results
       ignore_errors: yes
       loop: "{{ reachable_ips }}"
+      when: reachable_ips | length > 0
 
     - name: Сформировать списки с работающим и неработающим WinRM
       set_fact:
         winrm_ok: "{{ winrm_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
         winrm_failed: "{{ winrm_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
+      when: reachable_ips | length > 0
 
     - name: Вывести результаты проверки
       debug:
         msg: |
-          Полностью рабочий WinRM: {{ winrm_ok }}
-          Узлы доступны, но WinRM не настроен: {{ winrm_failed }}
-          Узлы недоступны (ping не проходит): {{ unreachable_ips }}
+          Полностью рабочий WinRM: {{ winrm_ok | default([]) }}
+          Узлы доступны, но WinRM не настроен: {{ winrm_failed | default([]) }}
+          Узлы недоступны (ping не проходит): {{ unreachable_ips | default([]) }}
+      when: winrm_hosts | length > 0
