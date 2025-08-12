@@ -18,23 +18,18 @@
       set_fact:
         status: >-
           {% if winrm_check is defined and winrm_check.ping == "pong" %}
-            super
+            reachable
           {% elif icmp_check.rc == 0 or icmp_check.stdout == "True" %}
             no_manage
           {% else %}
             unreachable
           {% endif %}
 
-    - name: Установить статус unreachable, если статус не установлен
-      set_fact:
-        status: unreachable
-      when: status is not defined
-
-- name: Итоговая статистика
+- name: Классификация хостов по статусам
   hosts: localhost
   gather_facts: no
   tasks:
-    - name: Собрать все статусы из Windows-хостов
+    - name: Собрать статусы reachable-хостов
       set_fact:
         host_statuses: >-
           {{
@@ -44,16 +39,27 @@
             | items2dict(key_name=1, value_name=0)
           }}
 
-    - name: Подсчет статистики
+    - name: Добавить unreachable хосты (без статуса)
       set_fact:
-        total: "{{ host_statuses | length }}"
-        count_super: "{{ host_statuses.values() | select('equalto', 'super') | list | length }}"
-        count_no_manage: "{{ host_statuses.values() | select('equalto', 'no_manage') | list | length }}"
-        count_unreachable: "{{ host_statuses.values() | select('equalto', 'unreachable') | list | length }}"
+        host_statuses: >-
+          {{
+            host_statuses
+            | combine(
+                dict(
+                  (item, 'unreachable') for item in groups['windows'] if item not in host_statuses
+                )
+              )
+          }}
 
-    - name: Вывести статистику
+    - name: Получить списки IP по статусам
+      set_fact:
+        reachable_hosts: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'reachable') | map(attribute='key') | list }}"
+        no_manage_hosts: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | map(attribute='key') | list }}"
+        unreachable_hosts: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | map(attribute='key') | list }}"
+
+    - name: Вывести результаты
       debug:
         msg: |
-          Все супер:  {{ count_super }} ({{ ((count_super | float / total) * 100) | round(1) }}%)
-          Доступен, но управление невозможно:  {{ count_no_manage }} ({{ ((count_no_manage | float / total) * 100) | round(1) }}%)
-          Недоступен априори:  {{ count_unreachable }} ({{ ((count_unreachable | float / total) * 100) | round(1) }}%)
+          Reachable (WinRM OK): {{ reachable_hosts | join(', ') }}
+          No manage (Ping OK, WinRM FAIL): {{ no_manage_hosts | join(', ') }}
+          Unreachable (No Ping): {{ unreachable_hosts | join(', ') }}
