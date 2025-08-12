@@ -1,42 +1,38 @@
 ---
-- name: Проверка доступности WinRM и деление на группы
+- name: Проверка WinRM доступности хостов из инвентаря
   hosts: localhost
   gather_facts: no
   vars:
-    ip_list:
-      - 192.168.1.10
-      - 192.168.1.20
-      - 192.168.1.30
+    winrm_hosts: "{{ groups['winrm_hosts'] }}"
 
   tasks:
-
-    - name: Проверить доступность узлов по ping (ICMP)
+    - name: Проверить доступность хостов по ICMP ping
       ansible.builtin.ping:
       delegate_to: "{{ item }}"
       register: ping_results
       ignore_errors: yes
-      loop: "{{ ip_list }}"
+      loop: "{{ winrm_hosts }}"
 
-    - name: Сформировать список доступных по ping узлов
+    - name: Сформировать списки reachable и unreachable по ping
       set_fact:
         reachable_ips: "{{ ping_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
         unreachable_ips: "{{ ping_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
 
-    - name: Проверить доступность WinRM на reachable_ips
+    - name: Проверить WinRM доступность на reachable узлах
       win_command: hostname
       delegate_to: "{{ item }}"
       register: winrm_results
       ignore_errors: yes
       loop: "{{ reachable_ips }}"
 
-    - name: Сформировать список узлов с доступным WinRM
+    - name: Сформировать списки с работающим и неработающим WinRM
       set_fact:
         winrm_ok: "{{ winrm_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
         winrm_failed: "{{ winrm_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
 
-    - name: Вывести результаты
+    - name: Вывести результаты проверки
       debug:
         msg: |
-          Доступные по WinRM: {{ winrm_ok }}
-          Доступные по ping, но WinRM не работает: {{ winrm_failed }}
-          Недоступные по ping: {{ unreachable_ips }}
+          Полностью рабочий WinRM: {{ winrm_ok }}
+          Узлы доступны, но WinRM не настроен: {{ winrm_failed }}
+          Узлы недоступны (ping не проходит): {{ unreachable_ips }}
