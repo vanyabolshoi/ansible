@@ -1,22 +1,21 @@
-- name: Проверка доступности WinRM на Windows-хостах
-  hosts: windows
+- hosts: all
   gather_facts: no
-  tasks:
-    - name: Проверить доступность порта 5986
-      win_shell: Test-NetConnection -ComputerName "{{ inventory_hostname }}" -Port 5986
-      register: port_check
-      ignore_errors: yes
+  vars:
+    failed_hosts: []
 
+  tasks:
     - name: Проверить доступность WinRM
       win_ping:
-      when: port_check.rc == 0 and port_check.stdout | search("TcpTestSucceeded : True")
-      register: winrm_check
+      register: winrm_result
       ignore_errors: yes
 
-    - name: Установить статус WinRM
+    - name: Собрать хосты с ошибкой WinRM
       set_fact:
-        winrm_status: "{{ 'reachable' if (winrm_check is defined and winrm_check.ping is defined) else 'unreachable' }}"
+        failed_hosts: "{{ failed_hosts + [inventory_hostname] }}"
+      when: winrm_result is failed or winrm_result is unreachable
 
-    - name: Вывести статус WinRM
-      debug:
-        msg: "WinRM status for {{ inventory_hostname }}: {{ winrm_status }}"
+  # В конце выводим список неудачных хостов
+  - name: Вывести список хостов, где не прошла проверка WinRM
+    debug:
+      msg: "WinRM не доступен на хостах: {{ failed_hosts }}"
+    run_once: true
