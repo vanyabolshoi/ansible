@@ -2,12 +2,12 @@
   hosts: windows
   gather_facts: no
   tasks:
-    - name: Проверка ICMP
+    - name: Проверка ICMP (ping)
       ansible.builtin.ping:
       register: icmp_check
       ignore_errors: yes
 
-    - name: Проверка WinRM
+    - name: Проверка WinRM (win_ping)
       ansible.windows.win_ping:
       register: winrm_check
       ignore_errors: yes
@@ -23,42 +23,39 @@
             unreachable
           {% endif %}
 
-    - name: Debug статус
-      debug:
-        msg: "Хост {{ inventory_hostname }} - статус {{ status }}"
-
-    - name: Добавить хост с атрибутом статуса в checked_hosts
-      add_host:
-        name: "{{ inventory_hostname }}"
-        groups: checked_hosts
-        status: "{{ status }}"
-
-- name: Вывод по статусам
+- name: Сбор и вывод IP по статусам
   hosts: localhost
   gather_facts: no
+  vars:
+    reachable_ips: []
+    no_manage_ips: []
+    unreachable_ips: []
   tasks:
-    - name: Debug группы checked_hosts
-      debug:
-        var: groups['checked_hosts']
-
-    - name: Собрать словарь статусов
+    - name: Получить список всех хостов из группы windows
       set_fact:
-        host_statuses: >-
-          {{
-            dict(
-              groups['checked_hosts'] | zip(
-                groups['checked_hosts'] | map('extract', hostvars, 'status')
-              )
-            )
-          }}
+        all_hosts: "{{ groups['windows'] }}"
 
-    - name: Debug статусов
-      debug:
-        var: host_statuses
+    - name: Собрать IP по статусам
+      set_fact:
+        reachable_ips: "{{ reachable_ips + [item] }}"
+      when: hostvars[item].status is defined and hostvars[item].status == 'reachable'
+      loop: "{{ all_hosts }}"
 
-    - name: Вывести списки по статусам
+    - name: Собрать IP no_manage
+      set_fact:
+        no_manage_ips: "{{ no_manage_ips + [item] }}"
+      when: hostvars[item].status is defined and hostvars[item].status == 'no_manage'
+      loop: "{{ all_hosts }}"
+
+    - name: Собрать IP unreachable
+      set_fact:
+        unreachable_ips: "{{ unreachable_ips + [item] }}"
+      when: hostvars[item].status is defined and hostvars[item].status == 'unreachable'
+      loop: "{{ all_hosts }}"
+
+    - name: Вывести списки IP
       debug:
         msg: |
-          Reachable: {{ host_statuses | dict2items | selectattr('value', 'equalto', 'reachable') | map(attribute='key') | list | join(', ') | default('нет') }}
-          No manage: {{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | map(attribute='key') | list | join(', ') | default('нет') }}
-          Unreachable: {{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | map(attribute='key') | list | join(', ') | default('нет') }}
+          Reachable: {{ reachable_ips | join(', ') | default('нет') }}
+          No manage: {{ no_manage_ips | join(', ') | default('нет') }}
+          Unreachable: {{ unreachable_ips | join(', ') | default('нет') }}
