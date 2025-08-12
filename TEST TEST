@@ -2,20 +2,14 @@
 - name: Проверка доступности Windows-хостов
   hosts: windows
   gather_facts: no
-  vars:
-    ansible_winrm_server_cert_validation: ignore
   tasks:
-    - name: Проверка ICMP (ping) с localhost к хосту
-      delegate_to: localhost
-      wait_for:
-        host: "{{ inventory_hostname }}"
-        port: 5985
-        timeout: 3
+    - name: Проверка ICMP (ping)
+      ansible.builtin.ping:
       register: icmp_check
       ignore_errors: yes
 
-    - name: Проверка WinRM
-      win_ping:
+    - name: Проверка WinRM (ping через winrm)
+      ansible.windows.win_ping:
       register: winrm_check
       ignore_errors: yes
 
@@ -24,31 +18,36 @@
         status: >-
           {% if winrm_check is defined and winrm_check.ping == "pong" %}
             reachable
-          {% elif icmp_check is defined and icmp_check.elapsed is defined %}
+          {% elif icmp_check is defined and icmp_check.ping is defined %}
             no_manage
           {% else %}
             unreachable
           {% endif %}
-      cacheable: yes  # Важно, чтобы статус остался доступен для следующего play
 
-- name: Классификация хостов по статусам
+    - name: Добавить хост с атрибутом статуса в группу checked_hosts
+      add_host:
+        name: "{{ inventory_hostname }}"
+        groups: checked_hosts
+        status: "{{ status }}"
+
+- name: Классификация хостов по статусам и вывод списков
   hosts: localhost
   gather_facts: no
   tasks:
-    - name: Собрать статусы хостов
+    - name: Собрать статусы хостов в словарь host_statuses
       set_fact:
         host_statuses: >-
           {{
-            groups['windows']
-            | map('extract', hostvars, 'status')
-            | zip(groups['windows'])
-            | map('reverse')
-            | items2dict()
+            dict(
+              groups['checked_hosts'] | zip(
+                groups['checked_hosts'] | map('extract', hostvars, 'status')
+              )
+            )
           }}
 
-    - name: Вывести списки по статусам
+    - name: Вывести списки хостов по статусам
       debug:
         msg: |
-          Reachable (WinRM OK): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'reachable') | map(attribute='key') | list | join(', ') }}
-          No manage (Ping OK, WinRM FAIL): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | map(attribute='key') | list | join(', ') }}
-          Unreachable (No Ping): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | map(attribute='key') | list | join(', ') }}
+          Reachable (WinRM OK): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'reachable') | map(attribute='key') | list | join(', ') | default('нет') }}
+          No manage (Ping OK, WinRM FAIL): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | map(attribute='key') | list | join(', ') | default('нет') }}
+          Unreachable (No Ping): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | map(attribute='key') | list | join(', ') | default('нет') }}
