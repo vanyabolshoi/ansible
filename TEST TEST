@@ -25,19 +25,19 @@
             unreachable
           {% endif %}
 
-    - name: Передать статус на localhost
-      local_action:
-        module: set_fact
-        host_statuses: "{{ host_statuses | default({}) | combine({inventory_hostname: status}) }}"
-      run_once: false
-
 - name: Итоговая статистика
   hosts: localhost
   gather_facts: no
   tasks:
-    - name: Получить все статусы из хостов windows
+    - name: Собрать все статусы
       set_fact:
-        host_statuses: "{{ groups['windows'] | map('extract', hostvars, ['status']) | zip(groups['windows']) | items2dict(key_name=1, value_name=0) }}"
+        host_statuses: >-
+          {{
+            groups['windows']
+            | map('extract', hostvars, 'status')
+            | zip(groups['windows'])
+            | items2dict(key_name=1, value_name=0)
+          }}
 
     - name: Подсчет статистики
       set_fact:
