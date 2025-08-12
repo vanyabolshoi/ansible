@@ -22,12 +22,20 @@
       ignore_errors: yes
       loop: "{{ winrm_hosts }}"
 
+    - name: DEBUG ping_results
+      debug:
+        var: ping_results
+
+    - name: DEBUG winrm_port_check
+      debug:
+        var: winrm_port_check
+
     - name: Сформировать списки
       set_fact:
         reachable_hosts: "{{ ping_results.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
         unreachable_hosts: "{{ ping_results.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
-        winrm_open_hosts: "{{ winrm_port_check.results | selectattr('failed', 'equalto', false) | map(attribute='item') | list }}"
-        winrm_closed_hosts: "{{ winrm_port_check.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
+        winrm_open_hosts: "{{ winrm_port_check.results | selectattr('state', 'equalto', 'started') | map(attribute='item') | list }}"
+        winrm_closed_hosts: "{{ winrm_port_check.results | selectattr('state', 'ne', 'started') | map(attribute='item') | list }}"
 
     - name: Проверить WinRM на reachable и с открытым портом 5986
       win_command: hostname
