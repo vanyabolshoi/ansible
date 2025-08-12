@@ -1,19 +1,18 @@
----
-- name: Проверка доступности Windows-хостов
+- name: Проверка Windows хостов
   hosts: windows
   gather_facts: no
   tasks:
-    - name: Проверка ICMP (ping)
+    - name: Проверка ICMP
       ansible.builtin.ping:
       register: icmp_check
       ignore_errors: yes
 
-    - name: Проверка WinRM (ping через winrm)
+    - name: Проверка WinRM
       ansible.windows.win_ping:
       register: winrm_check
       ignore_errors: yes
 
-    - name: Присвоить статус
+    - name: Определение статуса
       set_fact:
         status: >-
           {% if winrm_check is defined and winrm_check.ping == "pong" %}
@@ -24,17 +23,25 @@
             unreachable
           {% endif %}
 
-    - name: Добавить хост с атрибутом статуса в группу checked_hosts
+    - name: Debug статус
+      debug:
+        msg: "Хост {{ inventory_hostname }} - статус {{ status }}"
+
+    - name: Добавить хост с атрибутом статуса в checked_hosts
       add_host:
         name: "{{ inventory_hostname }}"
         groups: checked_hosts
         status: "{{ status }}"
 
-- name: Классификация хостов по статусам и вывод списков
+- name: Вывод по статусам
   hosts: localhost
   gather_facts: no
   tasks:
-    - name: Собрать статусы хостов в словарь host_statuses
+    - name: Debug группы checked_hosts
+      debug:
+        var: groups['checked_hosts']
+
+    - name: Собрать словарь статусов
       set_fact:
         host_statuses: >-
           {{
@@ -45,9 +52,13 @@
             )
           }}
 
-    - name: Вывести списки хостов по статусам
+    - name: Debug статусов
+      debug:
+        var: host_statuses
+
+    - name: Вывести списки по статусам
       debug:
         msg: |
-          Reachable (WinRM OK): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'reachable') | map(attribute='key') | list | join(', ') | default('нет') }}
-          No manage (Ping OK, WinRM FAIL): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | map(attribute='key') | list | join(', ') | default('нет') }}
-          Unreachable (No Ping): {{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | map(attribute='key') | list | join(', ') | default('нет') }}
+          Reachable: {{ host_statuses | dict2items | selectattr('value', 'equalto', 'reachable') | map(attribute='key') | list | join(', ') | default('нет') }}
+          No manage: {{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | map(attribute='key') | list | join(', ') | default('нет') }}
+          Unreachable: {{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | map(attribute='key') | list | join(', ') | default('нет') }}
