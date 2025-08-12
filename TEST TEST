@@ -38,14 +38,14 @@
   vars:
     host_statuses: "{{ hostvars | dict2items | selectattr('value.host_statuses', 'defined') | map(attribute='value.host_statuses') | first }}"
   tasks:
-    - name: Посчитать статистику
+    - name: Подсчет статистики
       set_fact:
         total: "{{ host_statuses | length }}"
         count_super: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'super') | list | length }}"
         count_no_manage: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | list | length }}"
         count_unreachable: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | list | length }}"
 
-    - name: Вывести красиво
+    - name: Вывести статистику
       debug:
         msg: |
           Все супер:  {{ count_super }} ({{ ((count_super | float / total) * 100) | round(1) }}%)
