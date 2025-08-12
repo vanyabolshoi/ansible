@@ -2,10 +2,6 @@
 - name: Проверка доступности WinRM на Windows-хостах
   hosts: windows
   gather_facts: false
-  vars:
-    reachable: []
-    unreachable: []
-
   tasks:
 
     - name: Проверить доступность WinRM
@@ -13,24 +9,17 @@
       register: ping_result
       ignore_errors: yes
 
-    - name: Собрать reachable
+    - name: Пометить хосты reachable/unreachable (локально)
       set_fact:
-        reachable: "{{ reachable + [inventory_hostname] }}"
-      when: ping_result is succeeded
+        winrm_status: "{{ 'reachable' if ping_result is succeeded else 'unreachable' }}"
 
-    - name: Собрать unreachable
-      set_fact:
-        unreachable: "{{ unreachable + [inventory_hostname] }}"
-      when: ping_result is failed
-
-    - name: Вывести список reachable
-      debug:
-        msg: "Доступен WinRM на хостах: {{ reachable }}"
+    - name: Сбор данных о статусе по всем хостам (локально)
       run_once: true
       delegate_to: localhost
-
-    - name: Вывести список unreachable
+      vars:
+        reachable_hosts: "{{ groups['windows'] | select('match', '.*') | select('extract', hostvars, 'winrm_status') | select('equalto', 'reachable') | list }}"
+        unreachable_hosts: "{{ groups['windows'] | select('match', '.*') | select('extract', hostvars, 'winrm_status') | select('equalto', 'unreachable') | list }}"
       debug:
-        msg: "WinRM недоступен на хостах: {{ unreachable }}"
-      run_once: true
-      delegate_to: localhost
+        msg:
+          - "Доступен WinRM на хостах: {{ reachable_hosts }}"
+          - "WinRM недоступен на хостах: {{ unreachable_hosts }}"
