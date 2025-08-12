@@ -1,4 +1,3 @@
----
 - name: Проверка доступности Windows-хостов
   hosts: windows
   gather_facts: no
@@ -29,7 +28,7 @@
   hosts: localhost
   gather_facts: no
   tasks:
-    - name: Собрать все статусы
+    - name: Собрать все статусы из Windows-хостов
       set_fact:
         host_statuses: >-
           {{
