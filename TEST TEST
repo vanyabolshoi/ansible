@@ -3,7 +3,7 @@
   hosts: windows
   gather_facts: no
   tasks:
-    - name: Проверка ICMP доступности
+    - name: Проверка ICMP
       win_shell: |
         Test-Connection -ComputerName $env:COMPUTERNAME -Count 1 -Quiet
       register: icmp_check
@@ -15,7 +15,7 @@
       ignore_errors: yes
       when: icmp_check.rc == 0 or icmp_check.stdout == "True"
 
-    - name: Определить статус
+    - name: Присвоить статус
       set_fact:
         status: >-
           {% if winrm_check.ping is defined and winrm_check.ping == "pong" %}
@@ -26,28 +26,28 @@
             unreachable
           {% endif %}
 
-    - name: Сохранить статус в общий словарь
+    - name: Сохранить статус
       set_fact:
         host_statuses: "{{ host_statuses | default({}) | combine({inventory_hostname: status}) }}"
       run_once: true
       delegate_to: localhost
 
-- name: Вывод итоговой статистики
+- name: Итоговая статистика
   hosts: localhost
   gather_facts: no
   vars:
     host_statuses: "{{ hostvars | dict2items | selectattr('value.host_statuses', 'defined') | map(attribute='value.host_statuses') | first }}"
   tasks:
-    - name: Подсчет статистики
+    - name: Посчитать статистику
       set_fact:
-        total_hosts: "{{ host_statuses | length }}"
+        total: "{{ host_statuses | length }}"
         count_super: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'super') | list | length }}"
         count_no_manage: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | list | length }}"
         count_unreachable: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | list | length }}"
 
-    - name: Показать статистику
+    - name: Вывести красиво
       debug:
-        msg:
-          - "Все супер:  {{ count_super }} ({{ ((count_super | float / total_hosts) * 100) | round(1) }}%)"
-          - "Доступен, но управление невозможно:  {{ count_no_manage }} ({{ ((count_no_manage | float / total_hosts) * 100) | round(1) }}%)"
-          - "Недоступен априори:  {{ count_unreachable }} ({{ ((count_unreachable | float / total_hosts) * 100) | round(1) }}%)"
+        msg: |
+          Все супер:  {{ count_super }} ({{ ((count_super | float / total) * 100) | round(1) }}%)
+          Доступен, но управление невозможно:  {{ count_no_manage }} ({{ ((count_no_manage | float / total) * 100) | round(1) }}%)
+          Недоступен априори:  {{ count_unreachable }} ({{ ((count_unreachable | float / total) * 100) | round(1) }}%)
