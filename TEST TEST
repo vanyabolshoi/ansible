@@ -4,8 +4,7 @@
   gather_facts: no
   tasks:
     - name: Проверка ICMP
-      win_shell: |
-        Test-Connection -ComputerName $env:COMPUTERNAME -Count 1 -Quiet
+      win_shell: Test-Connection -ComputerName $env:COMPUTERNAME -Count 1 -Quiet
       register: icmp_check
       ignore_errors: yes
 
@@ -18,7 +17,7 @@
     - name: Присвоить статус
       set_fact:
         status: >-
-          {% if winrm_check.ping is defined and winrm_check.ping == "pong" %}
+          {% if winrm_check is defined and winrm_check.ping == "pong" %}
             super
           {% elif icmp_check.rc == 0 or icmp_check.stdout == "True" %}
             no_manage
@@ -26,28 +25,30 @@
             unreachable
           {% endif %}
 
-    - name: Сохранить статус
-      set_fact:
+    - name: Передать статус на localhost
+      local_action:
+        module: set_fact
         host_statuses: "{{ host_statuses | default({}) | combine({inventory_hostname: status}) }}"
-      run_once: true
-      delegate_to: localhost
+      run_once: false
 
 - name: Итоговая статистика
   hosts: localhost
   gather_facts: no
-  vars:
-    host_statuses: "{{ hostvars | dict2items | selectattr('value.host_statuses', 'defined') | map(attribute='value.host_statuses') | first }}"
   tasks:
+    - name: Получить все статусы из хостов windows
+      set_fact:
+        host_statuses: "{{ groups['windows'] | map('extract', hostvars, ['status']) | zip(groups['windows']) | items2dict(key_name=1, value_name=0) }}"
+
     - name: Подсчет статистики
       set_fact:
-        total: "{{ host_statuses | length | int }}"
-        count_super: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'super') | list | length | int }}"
-        count_no_manage: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'no_manage') | list | length | int }}"
-        count_unreachable: "{{ host_statuses | dict2items | selectattr('value', 'equalto', 'unreachable') | list | length | int }}"
+        total: "{{ host_statuses | length }}"
+        count_super: "{{ host_statuses.values() | select('equalto', 'super') | list | length }}"
+        count_no_manage: "{{ host_statuses.values() | select('equalto', 'no_manage') | list | length }}"
+        count_unreachable: "{{ host_statuses.values() | select('equalto', 'unreachable') | list | length }}"
 
     - name: Вывести статистику
       debug:
         msg: |
-          Все супер:  {{ count_super }} ({{ ((count_super | float) / (total | float) * 100) | round(1) }}%)
-          Доступен, но управление невозможно:  {{ count_no_manage }} ({{ ((count_no_manage | float) / (total | float) * 100) | round(1) }}%)
-          Недоступен априори:  {{ count_unreachable }} ({{ ((count_unreachable | float) / (total | float) * 100) | round(1) }}%)
+          Все супер:  {{ count_super }} ({{ ((count_super | float / total) * 100) | round(1) }}%)
+          Доступен, но управление невозможно:  {{ count_no_manage }} ({{ ((count_no_manage | float / total) * 100) | round(1) }}%)
+          Недоступен априори:  {{ count_unreachable }} ({{ ((count_unreachable | float / total) * 100) | round(1) }}%)
