@@ -4,12 +4,11 @@
     failed_hosts: []
 
   tasks:
-    - block:
-        - name: Проверить доступность WinRM (win_ping)
-          win_ping:
+    - name: Проверка WinRM с обработкой ошибок
+      block:
+        - win_ping:
       rescue:
-        - name: Добавить хост в список failed_hosts из rescue
-          set_fact:
+        - set_fact:
             failed_hosts: "{{ failed_hosts + [inventory_hostname] }}"
 
     - name: Вывести список хостов, где не прошла проверка WinRM
