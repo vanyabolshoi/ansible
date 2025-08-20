@@ -1,14 +1,14 @@
 ---
-- name: Создание Linked Clone из шаблона 101 на PX03
+- name: Создание Linked Clone из шаблона 101 на PX03 с автостартом
   hosts: localhost
   connection: local
   gather_facts: no
 
   vars:
     api_user: "ansible@pve"
-    api_password: "Pharacia_"       # пароль для ansible@pve
-    api_host: "172.16.10.5"         # IP PX03
-    node: "PX03"                    # точное имя ноды в кластере
+    api_password: "Pharacia_"
+    api_host: "172.16.10.5"
+    node: "PX03"
     template_vmid: 101
 
     clones:
@@ -26,7 +26,19 @@
         vmid: "{{ template_vmid }}"
         clone: "{{ item.name }}"
         newid: "{{ item.vmid }}"
-        full: no               # Linked Clone
+        full: no
         target: "{{ node }}"
+        state: present
+      loop: "{{ clones }}"
+
+    - name: Включение автостарта для клонированных ВМ
+      community.proxmox.proxmox_kvm:
+        api_user: "{{ api_user }}"
+        api_password: "{{ api_password }}"
+        api_host: "{{ api_host }}"
+        validate_certs: no
+        node: "{{ node }}"
+        vmid: "{{ item.vmid }}"
+        onboot: yes
         state: present
       loop: "{{ clones }}"
