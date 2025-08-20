@@ -6,9 +6,9 @@
 
   vars:
     api_user: "ansible@pve"
-    api_password: "Pharacia_"       # поменяй, если пароль другой
-    api_host: "172.16.10.5"         # IP PX03
-    node: "PX03"                    # точное имя ноды в кластере
+    api_password: "Pharacia_"       # поменяй на свой пароль
+    api_host: "172.16.10.5"
+    node: "PX03"
     template_vmid: 101
 
     # список машин для создания
@@ -29,7 +29,6 @@
         newid: "{{ item.vmid }}"
         full: no               # Linked Clone
         target: "{{ node }}"
-        storage: local-lvm
         format: qcow2
         state: present
       loop: "{{ clones }}"
