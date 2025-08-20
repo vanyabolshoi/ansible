@@ -14,6 +14,9 @@
     clones:
       - { name: "test-vm-01", vmid: 201 }
       - { name: "test-vm-02", vmid: 202 }
+      - { name: "test-vm-03", vmid: 203 }
+      - { name: "test-vm-04", vmid: 204 }
+      - { name: "test-vm-05", vmid: 205 }
 
   tasks:
     - name: Клонирование из шаблона (Linked Clone)
