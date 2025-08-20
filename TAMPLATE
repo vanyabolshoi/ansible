@@ -1,5 +1,5 @@
 ---
-- name: Создание Linked Clone из шаблона 101 на PX03 с автостартом
+- name: Создание Linked Clone из шаблона 101 на PX03 с автостартом и запуском
   hosts: localhost
   connection: local
   gather_facts: no
@@ -41,4 +41,15 @@
         vmid: "{{ item.vmid }}"
         onboot: yes
         state: present
+      loop: "{{ clones }}"
+
+    - name: Немедленный запуск клонированных ВМ
+      community.proxmox.proxmox_kvm:
+        api_user: "{{ api_user }}"
+        api_password: "{{ api_password }}"
+        api_host: "{{ api_host }}"
+        validate_certs: no
+        node: "{{ node }}"
+        vmid: "{{ item.vmid }}"
+        state: started
       loop: "{{ clones }}"
