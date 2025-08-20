@@ -1,5 +1,5 @@
 ---
-- name: Выключение и удаление двух ВМ на PX03
+- name: Принудительное выключение и удаление двух ВМ на PX03
   hosts: localhost
   connection: local
   gather_facts: no
@@ -15,7 +15,7 @@
       - 202
 
   tasks:
-    - name: Выключение ВМ перед удалением
+    - name: Форсированное выключение ВМ перед удалением
       community.proxmox.proxmox_kvm:
         api_user: "{{ api_user }}"
         api_password: "{{ api_password }}"
@@ -24,9 +24,10 @@
         node: "{{ node }}"
         vmid: "{{ item }}"
         state: stopped
+        force: yes
       loop: "{{ clones_to_delete }}"
 
-    - name: Удаление ВМ
+    - name: Удаление ВМ с дисками
       community.proxmox.proxmox_kvm:
         api_user: "{{ api_user }}"
         api_password: "{{ api_password }}"
