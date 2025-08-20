@@ -1,0 +1,35 @@
+---
+- name: Создание Linked Clone из шаблона 101 на px03
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  vars:
+    api_user: "root@pam"
+    api_password: "Pharacia_"     # можно вынести в ansible-vault
+    api_host: "px03"
+    node: "px03"
+    template_vmid: 101
+
+    # список клонов, которые хотим создать
+    clones:
+      - { name: "test-vm-01", vmid: 201 }
+      - { name: "test-vm-02", vmid: 202 }
+
+  tasks:
+    - name: Клонирование из шаблона
+      community.general.proxmox_kvm:
+        api_user: "{{ api_user }}"
+        api_password: "{{ api_password }}"
+        api_host: "{{ api_host }}"
+        validate_certs: no
+        node: "{{ node }}"
+        vmid: "{{ template_vmid }}"
+        clone: "{{ item.name }}"
+        newid: "{{ item.vmid }}"
+        full: no               # ВАЖНО: это Linked Clone
+        target: "{{ node }}"
+        storage: local-lvm     # куда кладём диск
+        format: qcow2
+        state: present
+      loop: "{{ clones }}"
