@@ -1,5 +1,5 @@
 ---
-- name: Удаление ВМ на PX03
+- name: Выключение и удаление двух ВМ на PX03
   hosts: localhost
   connection: local
   gather_facts: no
@@ -10,13 +10,23 @@
     api_host: "172.16.10.5"
     node: "PX03"
 
-    # Список VM для удаления
     clones_to_delete:
       - 201
       - 202
 
   tasks:
-    - name: Удаление виртуальных машин
+    - name: Выключение ВМ перед удалением
+      community.proxmox.proxmox_kvm:
+        api_user: "{{ api_user }}"
+        api_password: "{{ api_password }}"
+        api_host: "{{ api_host }}"
+        validate_certs: no
+        node: "{{ node }}"
+        vmid: "{{ item }}"
+        state: stopped
+      loop: "{{ clones_to_delete }}"
+
+    - name: Удаление ВМ
       community.proxmox.proxmox_kvm:
         api_user: "{{ api_user }}"
         api_password: "{{ api_password }}"
@@ -25,5 +35,5 @@
         node: "{{ node }}"
         vmid: "{{ item }}"
         state: absent
-        purge: yes   # удаляет все диски и настройки VM
+        purge: yes
       loop: "{{ clones_to_delete }}"
