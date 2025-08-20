@@ -6,19 +6,19 @@
 
   vars:
     api_user: "root@pam"
-    api_password: "Pharacia_"     # можно вынести в ansible-vault
-    api_host: "px03"
-    node: "px03"
+    api_password: "Pharacia_"     # вынеси в vault!
+    api_host: "172.16.10.5"       # IP px03
+    node: "px03"                  # имя ноды в Proxmox GUI
     template_vmid: 101
 
-    # список клонов, которые хотим создать
+    # список клонов
     clones:
       - { name: "test-vm-01", vmid: 201 }
       - { name: "test-vm-02", vmid: 202 }
 
   tasks:
-    - name: Клонирование из шаблона
-      community.general.proxmox_kvm:
+    - name: Клонирование из шаблона (Linked Clone)
+      community.proxmox.proxmox_kvm:
         api_user: "{{ api_user }}"
         api_password: "{{ api_password }}"
         api_host: "{{ api_host }}"
@@ -27,9 +27,9 @@
         vmid: "{{ template_vmid }}"
         clone: "{{ item.name }}"
         newid: "{{ item.vmid }}"
-        full: no               # ВАЖНО: это Linked Clone
+        full: no               # Linked Clone (не полный)
         target: "{{ node }}"
-        storage: local-lvm     # куда кладём диск
+        storage: local-lvm
         format: qcow2
         state: present
       loop: "{{ clones }}"
