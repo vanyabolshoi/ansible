@@ -1,5 +1,5 @@
 ---
-- name: Создание Linked Clone из шаблона 101 на PX03 с автостартом и запуском
+- name: Создание Linked Clone из шаблона 101 на PX03 с автостартом и DHCP
   hosts: localhost
   connection: local
   gather_facts: no
@@ -14,9 +14,9 @@
     clones:
       - { name: "test-vm-01", vmid: 201 }
       - { name: "test-vm-02", vmid: 202 }
-      - { name: "test-vm-03", vmid: 203 }
-      - { name: "test-vm-04", vmid: 204 }
-      - { name: "test-vm-05", vmid: 205 }
+
+    cloudinit_user: "root"
+    cloudinit_password: "Pharacia_"   # пароль для root на каждой ВМ
 
   tasks:
     - name: Клонирование из шаблона (Linked Clone)
@@ -55,4 +55,20 @@
         node: "{{ node }}"
         vmid: "{{ item.vmid }}"
         state: started
+      loop: "{{ clones }}"
+
+    - name: Настройка Cloud-Init для DHCP
+      community.proxmox.proxmox_kvm:
+        api_user: "{{ api_user }}"
+        api_password: "{{ api_password }}"
+        api_host: "{{ api_host }}"
+        validate_certs: no
+        node: "{{ node }}"
+        vmid: "{{ item.vmid }}"
+        ciuser: "{{ cloudinit_user }}"
+        cipassword: "{{ cloudinit_password }}"
+        net0: "virtio,bridge=vmbr0"  # DHCP на vmbr0
+        sshkeys: ""
+        ostype: l26
+        state: present
       loop: "{{ clones }}"
