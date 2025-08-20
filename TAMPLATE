@@ -1,5 +1,5 @@
 ---
-- name: Создание Linked Clone из шаблона 101 на PX03 с автостартом и DHCP
+- name: Создание Linked Clone из шаблона 101 на PX03
   hosts: localhost
   connection: local
   gather_facts: no
@@ -14,10 +14,14 @@
     clones:
       - { name: "test-vm-01", vmid: 201 }
       - { name: "test-vm-02", vmid: 202 }
+      - { name: "test-vm-03", vmid: 203 }
+      - { name: "test-vm-04", vmid: 204 }
+      - { name: "test-vm-05", vmid: 205 }
 
-    cloudinit_user: "root"
-    cloudinit_password: "Pharacia_"   # пароль для root на каждой ВМ
-
+- name: Шаг 1. Клонирование Linked Clone
+  hosts: localhost
+  connection: local
+  gather_facts: no
   tasks:
     - name: Клонирование из шаблона (Linked Clone)
       community.proxmox.proxmox_kvm:
@@ -34,7 +38,12 @@
         state: present
       loop: "{{ clones }}"
 
-    - name: Включение автостарта для клонированных ВМ
+- name: Шаг 2. Автостарт и запуск ВМ
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Включение автостарта
       community.proxmox.proxmox_kvm:
         api_user: "{{ api_user }}"
         api_password: "{{ api_password }}"
@@ -46,7 +55,7 @@
         state: present
       loop: "{{ clones }}"
 
-    - name: Немедленный запуск клонированных ВМ
+    - name: Немедленный запуск ВМ
       community.proxmox.proxmox_kvm:
         api_user: "{{ api_user }}"
         api_password: "{{ api_password }}"
@@ -57,7 +66,15 @@
         state: started
       loop: "{{ clones }}"
 
-    - name: Настройка Cloud-Init для DHCP
+- name: Шаг 3. Настройка Cloud-Init для DHCP
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    cloudinit_user: "root"
+    cloudinit_password: "Pharacia_"
+  tasks:
+    - name: Настройка Cloud-Init (динамический IP)
       community.proxmox.proxmox_kvm:
         api_user: "{{ api_user }}"
         api_password: "{{ api_password }}"
@@ -67,7 +84,7 @@
         vmid: "{{ item.vmid }}"
         ciuser: "{{ cloudinit_user }}"
         cipassword: "{{ cloudinit_password }}"
-        net0: "virtio,bridge=vmbr0"  # DHCP на vmbr0
+        net0: "virtio,bridge=vmbr0"
         sshkeys: ""
         ostype: l26
         state: present
