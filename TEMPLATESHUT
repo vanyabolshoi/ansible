@@ -1,5 +1,5 @@
 ---
-- name: Принудительное выключение двух ВМ на PX03
+- name: Принудительное убийство двух ВМ на PX03
   hosts: localhost
   connection: local
   gather_facts: no
@@ -10,12 +10,12 @@
     api_host: "172.16.10.5"
     node: "PX03"
 
-    vms_to_stop:
+    vms_to_hard_stop:
       - 201
       - 202
 
   tasks:
-    - name: Форсированное выключение ВМ
+    - name: Принудительное выключение ВМ через 'kill'
       community.proxmox.proxmox_kvm:
         api_user: "{{ api_user }}"
         api_password: "{{ api_password }}"
@@ -25,4 +25,7 @@
         vmid: "{{ item }}"
         state: stopped
         force: yes
-      loop: "{{ vms_to_stop }}"
+        skip_pending_checks: yes
+        timeout: 30
+        # Для жесткого завершения можно использовать "shutdown: hard" в старых версиях, но в community.proxmox это просто force + timeout
+      loop: "{{ vms_to_hard_stop }}"
