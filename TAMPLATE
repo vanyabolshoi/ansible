@@ -1,5 +1,5 @@
 ---
-- name: Создание Linked Clone из шаблона 101 на PX03 с автостартом и запуском
+- name: Создание Linked Clone из шаблона 156 на PX03 с автостартом и запуском
   hosts: localhost
   connection: local
   gather_facts: no
@@ -9,11 +9,9 @@
     api_password: "Pharacia_"
     api_host: "172.16.10.5"
     node: "PX03"
-    template_vmid: 115
+    template_vmid: 156
 
-    clones:
-      - { name: "test-vm-01", vmid: 201 }
-      - { name: "test-vm-02", vmid: 202 }
+    clones: "{{ range(1, 11) | map('int') | list | map('regex_replace', '(.*)', 'win11-\\1') | list }}"
 
   tasks:
     - name: Клонирование из шаблона (Linked Clone)
@@ -24,8 +22,8 @@
         validate_certs: no
         node: "{{ node }}"
         vmid: "{{ template_vmid }}"
-        clone: "{{ item.name }}"
-        newid: "{{ item.vmid }}"
+        clone: "{{ item }}"
+        newid: "{{ 200 + loop.index }}"
         full: no
         target: "{{ node }}"
         state: present
@@ -38,7 +36,7 @@
         api_host: "{{ api_host }}"
         validate_certs: no
         node: "{{ node }}"
-        vmid: "{{ item.vmid }}"
+        vmid: "{{ 200 + loop.index }}"
         onboot: yes
         state: present
       loop: "{{ clones }}"
@@ -50,6 +48,6 @@
         api_host: "{{ api_host }}"
         validate_certs: no
         node: "{{ node }}"
-        vmid: "{{ item.vmid }}"
+        vmid: "{{ 200 + loop.index }}"
         state: started
       loop: "{{ clones }}"
