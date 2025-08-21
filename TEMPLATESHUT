@@ -1,5 +1,5 @@
 ---
-- name: Принудительное выключение ВМ на PX03 (201–210)
+- name: Принудительное выключение ВМ на PX03 (201–209)
   hosts: localhost
   connection: local
   gather_facts: no
