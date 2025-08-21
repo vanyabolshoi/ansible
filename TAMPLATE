@@ -11,7 +11,17 @@
     node: "PX03"
     template_vmid: 156
 
-    clones: "{{ range(1, 11) | map('int') | list | map('regex_replace', '(.*)', 'win11-\\1') | list }}"
+    clones:
+      - { name: "win11-01", vmid: 201 }
+      - { name: "win11-02", vmid: 202 }
+      - { name: "win11-03", vmid: 203 }
+      - { name: "win11-04", vmid: 204 }
+      - { name: "win11-05", vmid: 205 }
+      - { name: "win11-06", vmid: 206 }
+      - { name: "win11-07", vmid: 207 }
+      - { name: "win11-08", vmid: 208 }
+      - { name: "win11-09", vmid: 209 }
+      - { name: "win11-10", vmid: 210 }
 
   tasks:
     - name: Клонирование из шаблона (Linked Clone)
@@ -22,8 +32,8 @@
         validate_certs: no
         node: "{{ node }}"
         vmid: "{{ template_vmid }}"
-        clone: "{{ item }}"
-        newid: "{{ 200 + loop.index }}"
+        clone: "{{ item.name }}"
+        newid: "{{ item.vmid }}"
         full: no
         target: "{{ node }}"
         state: present
@@ -36,7 +46,7 @@
         api_host: "{{ api_host }}"
         validate_certs: no
         node: "{{ node }}"
-        vmid: "{{ 200 + loop.index }}"
+        vmid: "{{ item.vmid }}"
         onboot: yes
         state: present
       loop: "{{ clones }}"
@@ -48,6 +58,6 @@
         api_host: "{{ api_host }}"
         validate_certs: no
         node: "{{ node }}"
-        vmid: "{{ 200 + loop.index }}"
+        vmid: "{{ item.vmid }}"
         state: started
       loop: "{{ clones }}"
