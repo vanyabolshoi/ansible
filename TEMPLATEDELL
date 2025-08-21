@@ -1,5 +1,5 @@
 ---
-- name: Принудительное выключение и удаление двух ВМ на PX03
+- name: Принудительное выключение и удаление ВМ на PX03 (201–210)
   hosts: localhost
   connection: local
   gather_facts: no
@@ -9,10 +9,7 @@
     api_password: "Pharacia_"
     api_host: "172.16.10.5"
     node: "PX03"
-
-    clones_to_delete:
-      - 201
-      - 202
+    clones_to_delete: "{{ range(201, 211) | list }}"  # список от 201 до 210 включительно
 
   tasks:
     - name: Форсированное выключение ВМ перед удалением
