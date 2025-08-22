@@ -1,5 +1,5 @@
 ---
-- name: Переименование Windows машины
+- name: Переименование Windows машины и перезагрузка
   hosts: all
   gather_facts: no
   vars:
