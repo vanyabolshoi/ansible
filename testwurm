@@ -1,6 +1,6 @@
 ---
-- name: Переименование Windows машины и перезагрузка
-  hosts: all
+- name: Переименование Windows машины 172.16.11.65 и перезагрузка
+  hosts: win201
   gather_facts: no
   tasks:
     - name: Переименовать компьютер
