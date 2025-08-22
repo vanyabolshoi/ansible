@@ -1,13 +1,6 @@
----
-- name: Переименование Windows машины 172.16.11.65 и перезагрузка
-  hosts: 172.16.11.65
+- name: Переименование Windows машины win201 и перезагрузка
+  hosts: win201
   gather_facts: no
-  vars:
-    ansible_user: Admin
-    ansible_password: Pharmacia_
-    ansible_connection: winrm
-    ansible_winrm_transport: basic
-    ansible_winrm_server_cert_validation: ignore
 
   tasks:
     - name: Проверка подключения (ping)
