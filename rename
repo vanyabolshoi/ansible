@@ -1,0 +1,36 @@
+---
+- name: Переименовать Windows машины по VMID
+  hosts: localhost
+  gather_facts: no
+  vars:
+    proxmox_host: "172.16.10.5"
+    proxmox_user: "root@pam"
+    proxmox_password: "пароль_проксмокса"
+    vm_ids: [201,202,203,204,205,206,207,208,209,210]
+  tasks:
+
+    - name: Получить IP ВМ из Proxmox
+      community.general.proxmox:
+        api_user: "{{ proxmox_user }}"
+        api_password: "{{ proxmox_password }}"
+        api_host: "{{ proxmox_host }}"
+        vmid: "{{ item }}"
+        node: "px03"
+        guest_agent: yes
+      loop: "{{ vm_ids }}"
+      register: vm_info
+
+    - name: Собрать IP-адреса ВМ
+      set_fact:
+        windows_hosts: "{{ windows_hosts | default({}) | combine({item.ansible_loop_var: {'ansible_host': item.ansible_facts['ansible_network_interfaces']['eth0']['ipv4'][0]['address'], 'ansible_user':'Administrator', 'ansible_password':'ПарольWindows', 'ansible_connection':'winrm', 'ansible_winrm_transport':'ntlm', 'ansible_port':5985}}) }}"
+      loop: "{{ vm_info.results }}"
+
+    - name: Переименовать Windows ВМ
+      hosts: all
+      gather_facts: no
+      tasks:
+        - name: Установить новое имя компьютера
+          ansible.windows.win_hostname:
+            name: "PC{{ item }}"
+            reboot: yes
+      loop: "{{ vm_ids }}"
