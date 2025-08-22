@@ -2,11 +2,8 @@
 - name: Переименование Windows машины и перезагрузка
   hosts: all
   gather_facts: no
-  vars:
-    new_hostname: "201"
-
   tasks:
     - name: Переименовать компьютер
       ansible.windows.win_hostname:
-        name: "{{ new_hostname }}"
+        name: "201"
         reboot: yes
