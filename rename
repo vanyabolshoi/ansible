@@ -1,37 +1,28 @@
-- name: Получить IP ВМ из Proxmox
+---
+- name: Переименовать Windows ВМ через QEMU Guest Agent
   hosts: localhost
   gather_facts: no
   vars:
     proxmox_host: "172.16.10.5"
     proxmox_user: "root@pam"
-    proxmox_password: "Pharmacia_"
-    vm_ids: [201,202,203,204,205,206,207,208,209,210]
+    proxmox_password: "ПарольProxmox"
     node_name: "px03"
+    vm_ids: [201,202,203,204,205,206,207,208,209,210]
   tasks:
-    - name: Получить информацию о VM через QEMU Guest Agent
+    - name: Переименовать Windows ВМ и перезагрузить через Guest Agent
       community.proxmox.proxmox:
         api_user: "{{ proxmox_user }}"
         api_password: "{{ proxmox_password }}"
         api_host: "{{ proxmox_host }}"
-        vmid: "{{ item }}"
         node: "{{ node_name }}"
+        vmid: "{{ item }}"
         guest_agent: yes
+        state: present
+        command: >-
+          powershell Rename-Computer -NewName PC{{ item }} -Force -Restart
       loop: "{{ vm_ids }}"
-      register: vm_info
+      register: rename_results
 
-    - name: Сформировать список Windows хостов
-      set_fact:
-        windows_hosts: >-
-          {{
-            windows_hosts | default({}) | combine({
-              "PC" + item.item|string: {
-                "ansible_host": item.ansible_facts.qemu_guest.ip_addresses[0],
-                "ansible_user": "Administrator",
-                "ansible_password": "ПарольWindows",
-                "ansible_connection": "winrm",
-                "ansible_winrm_transport": "ntlm",
-                "ansible_port": 5985
-              }
-            })
-          }}
-      loop: "{{ vm_info.results }}"
+    - name: Вывести результат переименования
+      debug:
+        var: rename_results.results
