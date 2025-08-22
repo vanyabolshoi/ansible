@@ -1,15 +1,12 @@
 ---
-- name: Проверка подключения к Windows через WinRM
-  hosts: windows
+- name: Переименование Windows машины
+  hosts: all
   gather_facts: no
   vars:
-    ansible_user: Admin
-    ansible_password: Pharmacia_
-    ansible_port: 5985
-    ansible_connection: winrm
-    ansible_winrm_transport: basic
-    ansible_winrm_server_cert_validation: ignore
+    new_hostname: "201"
 
   tasks:
-    - name: Проверка подключения (ping)
-      win_ping:
+    - name: Переименовать компьютер
+      ansible.windows.win_hostname:
+        name: "{{ new_hostname }}"
+        reboot: yes
