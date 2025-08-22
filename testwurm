@@ -1,9 +1,22 @@
 ---
 - name: Переименование Windows машины 172.16.11.65 и перезагрузка
-  hosts: win201
+  hosts: 172.16.11.65
   gather_facts: no
+  vars:
+    ansible_user: Admin
+    ansible_password: Pharmacia_
+    ansible_connection: winrm
+    ansible_winrm_transport: basic
+    ansible_winrm_server_cert_validation: ignore
+
   tasks:
+    - name: Проверка подключения (ping)
+      ansible.windows.win_ping:
+
     - name: Переименовать компьютер
       ansible.windows.win_hostname:
-        name: "201"
-        reboot: yes
+        name: 201
+
+    - name: Перезагрузка Windows
+      ansible.windows.win_reboot:
+        reboot_timeout: 600
