@@ -12,17 +12,17 @@
   tasks:
     - name: Переименовать Windows ВМ и перезагрузить через Guest Agent
       community.general.proxmox_qemu_agent_exec:
+        api_host: "{{ proxmox_host }}"
         api_user: "{{ proxmox_user }}"
         api_password: "{{ proxmox_password }}"
-        api_host: "{{ proxmox_host }}"
         node: "{{ node_name }}"
         vmid: "{{ item }}"
-        command: powershell
+        command: "powershell"
         arguments:
           - "Rename-Computer -NewName PC{{ item }} -Force -Restart"
       loop: "{{ vm_ids }}"
       register: rename_results
 
-    - name: Вывести результат переименования
+    - name: Показать результаты выполнения
       debug:
         var: rename_results.results
