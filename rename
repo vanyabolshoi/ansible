@@ -1,7 +1,28 @@
 ---
-- name: Проверка WinRM логина/пароля
-  hosts: all
+- name: Переименование Windows-машин по порядку
+  hosts: windows
   gather_facts: no
+  vars:
+    prefix: "PC"
+    start_number: 201
   tasks:
-    - name: Выполнить whoami на Windows
-      ansible.windows.win_command: whoami
+    - name: Присвоить номер каждой машине
+      set_fact:
+        pc_number: "{{ start_number + item.0 }}"
+      loop: "{{ query('inventory_hostnames', 'windows') | enumerate }}"
+      loop_control:
+        label: "{{ item.1 }}"
+      run_once: true
+      register: numbered_hosts
+
+    - name: Переименовать компьютер
+      ansible.windows.win_hostname:
+        name: "{{ prefix }}{{ start_number + idx }}"
+      loop: "{{ query('inventory_hostnames', 'windows') }}"
+      loop_control:
+        index_var: idx
+
+    - name: Перезагрузить машину после переименования
+      ansible.windows.win_reboot:
+        msg: "Перезагрузка после переименования"
+        reboot_timeout: 600
