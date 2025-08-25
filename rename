@@ -1,28 +1,21 @@
 ---
-- name: Переименовать Windows ВМ через QEMU Guest Agent
-  hosts: localhost
+- name: Переименовать Windows ВМ через WinRM
+  hosts: all
   gather_facts: no
   vars:
-    proxmox_host: "172.16.10.5"
-    proxmox_user: "root@pam"
-    proxmox_password: "ПарольProxmox"
-    node_name: "px03"
-    vm_ids: [201,202,203,204,205,206,207,208,209,210]
+    new_names:
+      win201: PC201
+      win202: PC202
+      win203: PC203
+      win204: PC204
+      win205: PC205
+      win206: PC206
+      win207: PC207
+      win208: PC208
+      win209: PC209
+      win210: PC210
 
   tasks:
-    - name: Переименовать Windows ВМ и перезагрузить через Guest Agent
-      community.general.proxmox_qemu_agent_exec:
-        api_host: "{{ proxmox_host }}"
-        api_user: "{{ proxmox_user }}"
-        api_password: "{{ proxmox_password }}"
-        node: "{{ node_name }}"
-        vmid: "{{ item }}"
-        command: "powershell"
-        arguments:
-          - "Rename-Computer -NewName PC{{ item }} -Force -Restart"
-      loop: "{{ vm_ids }}"
-      register: rename_results
-
-    - name: Показать результаты выполнения
-      debug:
-        var: rename_results.results
+    - name: Переименовать компьютер
+      win_command: >
+        powershell -Command "Rename-Computer -NewName {{ new_names[inventory_hostname] }} -Force -Restart"
