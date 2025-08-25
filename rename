@@ -1,21 +1,7 @@
 ---
-- name: Переименовать Windows ВМ через WinRM
+- name: Проверка WinRM логина/пароля
   hosts: all
   gather_facts: no
-  vars:
-    new_names:
-      win201: PC201
-      win202: PC202
-      win203: PC203
-      win204: PC204
-      win205: PC205
-      win206: PC206
-      win207: PC207
-      win208: PC208
-      win209: PC209
-      win210: PC210
-
   tasks:
-    - name: Переименовать компьютер
-      win_command: >
-        powershell -Command "Rename-Computer -NewName {{ new_names[inventory_hostname] }} -Force -Restart"
+    - name: Выполнить whoami на Windows
+      ansible.windows.win_command: whoami
