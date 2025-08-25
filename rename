@@ -7,12 +7,17 @@
     start_number: 201
 
   tasks:
-    - name: Переименовать компьютер по порядку
+    - name: Получить список всех Windows-хостов
+      set_fact:
+        all_windows: "{{ query('inventory_hostnames', 'windows') }}"
+
+    - name: Вычислить номер для текущего хоста
+      set_fact:
+        new_number: "{{ start_number + all_windows.index(inventory_hostname) }}"
+
+    - name: Переименовать компьютер
       ansible.windows.win_hostname:
-        name: "{{ prefix }}{{ start_number + loop.index0 }}"
-      loop: "{{ query('inventory_hostnames', 'windows') }}"
-      loop_control:
-        label: "{{ item }}"
+        name: "{{ prefix }}{{ new_number }}"
 
     - name: Перезагрузить машину после переименования
       ansible.windows.win_reboot:
