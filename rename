@@ -5,22 +5,14 @@
   vars:
     prefix: "PC"
     start_number: 201
-  tasks:
-    - name: Присвоить номер каждой машине
-      set_fact:
-        pc_number: "{{ start_number + item.0 }}"
-      loop: "{{ query('inventory_hostnames', 'windows') | enumerate }}"
-      loop_control:
-        label: "{{ item.1 }}"
-      run_once: true
-      register: numbered_hosts
 
-    - name: Переименовать компьютер
+  tasks:
+    - name: Переименовать компьютер по порядку
       ansible.windows.win_hostname:
-        name: "{{ prefix }}{{ start_number + idx }}"
+        name: "{{ prefix }}{{ start_number + loop.index0 }}"
       loop: "{{ query('inventory_hostnames', 'windows') }}"
       loop_control:
-        index_var: idx
+        label: "{{ item }}"
 
     - name: Перезагрузить машину после переименования
       ansible.windows.win_reboot:
