@@ -9,7 +9,7 @@
     api_password: "Pharacia_"
     api_host: "172.16.10.5"
     node: "PX03"
-    vms_to_start: "{{ range(201, 211) | list }}"  # создаёт список от 201 до 210 включительно
+    vms_to_start: "{{ range(301, 311) | list }}"  # создаёт список от 201 до 210 включительно
 
   tasks:
     - name: Включение ВМ
