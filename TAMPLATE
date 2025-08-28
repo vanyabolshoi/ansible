@@ -24,7 +24,7 @@
       - { name: "win11-10", vmid: 210 }
 
   tasks:
-    - name: Клонирование из шаблона (Linked Clone)
+    - name: Клонирование из шаблона (Linked Clone на parser-zfs)
       community.proxmox.proxmox_kvm:
         api_user: "{{ api_user }}"
         api_password: "{{ api_password }}"
@@ -36,6 +36,7 @@
         newid: "{{ item.vmid }}"
         full: no
         target: "{{ node }}"
+        storage: "parser-zfs"
         state: present
       loop: "{{ clones }}"
 
