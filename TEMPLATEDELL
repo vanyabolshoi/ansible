@@ -23,6 +23,10 @@
         state: stopped
         force: yes
       loop: "{{ clones_to_delete }}"
+      register: shutdown_result
+      failed_when: >
+        shutdown_result is failed and
+        ('does not exist' not in (shutdown_result.msg | default('')))
 
     - name: Удаление ВМ с дисками
       community.proxmox.proxmox_kvm:
@@ -35,3 +39,7 @@
         state: absent
         purge: yes
       loop: "{{ clones_to_delete }}"
+      register: delete_result
+      failed_when: >
+        delete_result is failed and
+        ('does not exist' not in (delete_result.msg | default('')))
