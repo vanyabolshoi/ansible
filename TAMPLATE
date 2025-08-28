@@ -1,5 +1,5 @@
 ---
-- name: Создание Linked Clone из шаблона 156 на PX03 с автостартом и запуском
+- name: Создание Full Clone из шаблона 156 на PX03 с автостартом и запуском
   hosts: localhost
   connection: local
   gather_facts: no
@@ -24,7 +24,7 @@
       - { name: "win11-10", vmid: 210 }
 
   tasks:
-    - name: Клонирование из шаблона (Linked Clone)
+    - name: Клонирование из шаблона (Full Clone на ZFS)
       community.proxmox.proxmox_kvm:
         api_user: "{{ api_user }}"
         api_password: "{{ api_password }}"
@@ -34,8 +34,9 @@
         vmid: "{{ template_vmid }}"
         clone: "{{ item.name }}"
         newid: "{{ item.vmid }}"
-        full: no
+        full: yes          # ✅ Full clone
         target: "{{ node }}"
+        storage: "parser-zfs"
         state: present
       loop: "{{ clones }}"
 
