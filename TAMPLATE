@@ -34,10 +34,11 @@
         vmid: "{{ template_vmid }}"
         clone: "{{ item.name }}"
         newid: "{{ item.vmid }}"
-        full: yes          # ✅ Full clone
+        full: yes
         target: "{{ node }}"
         storage: "parser-zfs"
         state: present
+        timeout: 3600   # ⏱ Таймаут на полное клонирование — 1 час
       loop: "{{ clones }}"
 
     - name: Включение автостарта для клонированных ВМ
