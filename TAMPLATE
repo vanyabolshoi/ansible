@@ -24,18 +24,6 @@
       - { name: "win11-10", vmid: 210 }
 
   tasks:
-    - name: Переместить диск шаблона на ZFS пул (если нужно)
-      community.proxmox.proxmox_kvm:
-        api_user: "{{ api_user }}"
-        api_password: "{{ api_password }}"
-        api_host: "{{ api_host }}"
-        validate_certs: no
-        node: "{{ node }}"
-        vmid: "{{ template_vmid }}"
-        disk: "virtio0"          # укажи актуальный диск шаблона
-        storage: "parser-zfs"
-        state: present
-
     - name: Клонирование из шаблона (Linked Clone)
       community.proxmox.proxmox_kvm:
         api_user: "{{ api_user }}"
