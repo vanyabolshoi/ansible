@@ -2,26 +2,24 @@
 - name: Проверка доступности Windows-хостов с подсчетом
   hosts: windows
   gather_facts: no
-  vars:
-    total_hosts: "{{ groups['windows'] | length | int }}"
   tasks:
-    - name: Проверка пинга Windows хоста (WinRM)
+    - name: Проверка WinRM доступности
       win_ping:
-      register: ping_result
+      register: winrm_result
       ignore_errors: yes
 
-    - name: Добавить факт с успешностью пинга
+    - name: Добавить факт с успешностью WinRM
       set_fact:
-        ping_success: "{{ (ping_result is defined and ping_result.ping is defined) | ternary(1, 0) }}"
+        winrm_success: "{{ (winrm_result is defined and winrm_result.ping is defined) | ternary(1, 0) }}"
 
     - name: Собрать успешные хосты в переменную
       set_fact:
-        successful_hosts: "{{ (successful_hosts | default([])) + [inventory_hostname] if ping_success == 1 else successful_hosts | default([]) }}"
+        successful_hosts: "{{ (successful_hosts | default([])) + [inventory_hostname] if winrm_success == 1 else successful_hosts | default([]) }}"
 
   post_tasks:
     - name: Вывести итог по количеству хостов
       debug:
         msg: >
-          Общее количество IP: {{ total_hosts }},
+          Общее количество IP: {{ groups['windows'] | length }},
           Успешно отвечают: {{ successful_hosts | default([]) | length }},
-          Не отвечают: {{ total_hosts - (successful_hosts | default([]) | length) }}
+          Не отвечают: {{ (groups['windows'] | length | int) - (successful_hosts | default([]) | length) }}
