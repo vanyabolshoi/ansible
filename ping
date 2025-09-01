@@ -1,7 +1,8 @@
 ---
-- name: Проверка доступности Windows-хостов с подсчетом
+- name: Проверка доступности WinRM на Windows-хостах
   hosts: windows
   gather_facts: no
+
   tasks:
     - name: Проверка WinRM доступности
       win_ping:
@@ -23,3 +24,11 @@
           Общее количество IP: {{ groups['windows'] | length }},
           Успешно отвечают: {{ successful_hosts | default([]) | length }},
           Не отвечают: {{ (groups['windows'] | length | int) - (successful_hosts | default([]) | length) }}
+
+    - name: Список успешных хостов
+      debug:
+        var: successful_hosts | default([])
+
+    - name: Список неотвечающих хостов
+      debug:
+        var: "{{ groups['windows'] | difference(successful_hosts | default([])) }}"
