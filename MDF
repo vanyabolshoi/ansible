@@ -1,6 +1,8 @@
-- name: Найти файл .mdf на Windows
+---
+- name: Найти и показать файлы .mdf на Windows
   hosts: windows
   gather_facts: no
+
   tasks:
     - name: Найти файлы .mdf в C:\DataSQL
       win_find:
@@ -8,6 +10,11 @@
         patterns: "*.mdf"
       register: mdf_files
 
-    - name: Показать найденные файлы
+    - name: Показать только имена файлов
       debug:
-        var: mdf_files.files
+        msg: "{{ mdf_files.files | map(attribute='filename') | list }}"
+
+    - name: Показать каждый файл на отдельной строке
+      debug:
+        msg: "{{ item.filename }}"
+      loop: "{{ mdf_files.files }}"
