@@ -1,0 +1,13 @@
+- name: Найти файл .mdf на Windows
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Найти файлы .mdf в C:\DataSQL
+      win_find:
+        paths: C:\DataSQL
+        patterns: "*.mdf"
+      register: mdf_files
+
+    - name: Показать найденные файлы
+      debug:
+        var: mdf_files.files
