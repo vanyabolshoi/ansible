@@ -1,5 +1,4 @@
----
-- name: Найти и показать файлы .mdf на Windows
+- name: Показать только имена файлов чисто
   hosts: windows
   gather_facts: no
 
@@ -10,11 +9,9 @@
         patterns: "*.mdf"
       register: mdf_files
 
-    - name: Показать только имена файлов
-      debug:
-        msg: "{{ mdf_files.files | map(attribute='filename') | list }}"
-
-    - name: Показать каждый файл на отдельной строке
-      debug:
+    - name: Вывести имена файлов без лишней информации
+      ansible.builtin.debug:
         msg: "{{ item.filename }}"
       loop: "{{ mdf_files.files }}"
+      loop_control:
+        label: "{{ item.filename }}"
