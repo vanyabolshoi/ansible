@@ -1,8 +1,19 @@
-- name: Run PowerShell tasks
-  hosts: all
+- name: Install PowerShell 7 from local MSI
+  hosts: windows
   gather_facts: no
 
   tasks:
-    - name: Пример запуска PowerShell
-      ansible.builtin.shell: |
-        Write-Output "Hello from PowerShell"
+    - name: Ensure Temp folder exists
+      win_file:
+        path: C:\Temp
+        state: directory
+
+    - name: Copy PowerShell MSI to target host
+      win_copy:
+        src: files/PowerShell-7.5.6-win-x64.msi  # путь в твоём repo
+        dest: C:\Temp\PowerShell-7.5.6-win-x64.msi
+
+    - name: Install PowerShell 7
+      win_package:
+        path: C:\Temp\PowerShell-7.5.6-win-x64.msi
+        state: present
