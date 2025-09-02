@@ -1,4 +1,4 @@
-- name: Создать батник для 1С с динамическим именем базы
+- name: Создать батник noblock для 1С с именем базы из первого .mdf
   hosts: windows
   gather_facts: no
 
@@ -9,12 +9,11 @@
         patterns: "*.mdf"
       register: mdf_files
 
-    - name: Создать батник для каждого файла
+    - name: Создать батник C:\temp\noblock.bat
       win_copy:
-        dest: "C:\\temp\\run_{{ item.filename | replace('.mdf','') }}.bat"
+        dest: "C:\\temp\\noblock.bat"
         content: |
           chcp 866
           @echo off
           cls
-          "C:\Program Files\1cv8\8.3.16.1224\bin\1cv8.exe" ENTERPRISE /S "localhost\{{ item.filename | replace('.mdf','') }}" /N ИмяПользователя /P Пароль /DisableStartupMessages /C "DisableBlocking"
-      loop: "{{ mdf_files.files }}"
+          "C:\Program Files\1cv8\8.3.16.1224\bin\1cv8.exe" ENTERPRISE /S "localhost\{{ mdf_files.files[0].filename | replace('.mdf','') }}" /N ИмяПользователя /P Пароль /DisableStartupMessages /C "DisableBlocking"
