@@ -1,4 +1,4 @@
-- name: Показать только имена файлов чисто
+- name: Вывести IP и имя файла
   hosts: windows
   gather_facts: no
 
@@ -9,9 +9,9 @@
         patterns: "*.mdf"
       register: mdf_files
 
-    - name: Вывести имена файлов без лишней информации
+    - name: Показать IP и имя файла
       ansible.builtin.debug:
-        msg: "{{ item.filename }}"
+        msg: "{{ inventory_hostname }} -> {{ item.filename }}"
       loop: "{{ mdf_files.files }}"
       loop_control:
-        label: "{{ item.filename }}"
+        label: "{{ inventory_hostname }} -> {{ item.filename }}"
