@@ -1,6 +1,8 @@
-tasks:
-    - name: Install PowerShell 7
-      win_chocolatey:
-        name: powershell-core
-        state: present
-      when: ansible_os_family == "Windows"
+- name: Run PowerShell tasks
+  hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: Пример запуска PowerShell
+      ansible.builtin.shell: |
+        Write-Output "Hello from PowerShell"
