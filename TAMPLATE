@@ -9,14 +9,14 @@
     api_password: "Pharacia_"
     api_host: "172.16.10.5"
     node: "PX03"
-    template_vmid: 305   # ✅ правильный шаблон
+    template_vmid: 205   # ✅ правильный шаблон
 
     clones:
-      - { name: "win11-01", vmid: 201 }
-      - { name: "win11-02", vmid: 202 }
-      - { name: "win11-03", vmid: 203 }
-      - { name: "win11-04", vmid: 204 }
-      - { name: "win11-05", vmid: 205 }
+      - { name: "win11-01", vmid: 301 }
+      - { name: "win11-02", vmid: 302 }
+      - { name: "win11-03", vmid: 303 }
+      - { name: "win11-04", vmid: 304 }
+      - { name: "win11-05", vmid: 305 }
 
   tasks:
     - name: Клонирование из шаблона (Full Clone на ZFS)
