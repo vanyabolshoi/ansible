@@ -12,17 +12,17 @@
       win_package:
         path: "C:\\Temp\\GLPI-Agent-1.15-x64.msi"
         state: present
-        arguments: '/quiet ALLUSERS=1 DISPLAYLEVEL=0'
+        arguments: '/quiet ALLUSERS=1 DISPLAYLEVEL=0'  # видимо для всех пользователей, не скрыто
 
     - name: Configure GLPI-Agent server via batch
       win_command: >
         "C:\\Program Files\\GLPI-Agent\\glpi-agent.bat"
-        --server http://172.16.10.234:7932/marketplace/glpiinventory/
+        --server "http://172.16.10.234:7932/marketplace/glpiinventory/"
       args:
         chdir: "C:\\Program Files\\GLPI-Agent"
 
     - name: Set GLPI-Agent server URL in registry
-      ansible.windows.win_shell: |
+      win_shell: |
         $regPath = "HKLM:\SOFTWARE\GLPI-Agent"
         $regName = "server"
         $regValue = "http://172.16.10.234:7932/marketplace/glpiinventory/"
@@ -39,11 +39,12 @@
         name: GLPI-Agent
         state: started
 
-    - name: Force first inventory (debug mode)
+    - name: Force immediate inventory for all tasks (debug mode)
       win_command: >
         "C:\\Program Files\\GLPI-Agent\\glpi-agent.bat"
-        --server http://172.16.10.234:7932/marketplace/glpiinventory/
+        --server "http://172.16.10.234:7932/marketplace/glpiinventory/"
         --tasks Inventory,RemoteInventory
+        --set-forcerun
         --debug
       args:
         chdir: "C:\\Program Files\\GLPI-Agent"
