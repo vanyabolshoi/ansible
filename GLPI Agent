@@ -8,11 +8,12 @@
         url: "https://github.com/vanyabolshoi/ansible/raw/main/GLPI-Agent-1.15-x64.msi"
         dest: "C:\\Temp\\GLPI-Agent-1.15-x64.msi"
 
-    - name: Install GLPI-Agent
+    - name: Install GLPI-Agent for all users (visible)
       win_package:
         path: "C:\\Temp\\GLPI-Agent-1.15-x64.msi"
         state: present
-        arguments: '/quiet'
+        arguments: 'ALLUSERS=1'
+        product_id: ''
 
     - name: Configure GLPI-Agent server via batch
       win_command: >
@@ -40,7 +41,7 @@
         name: GLPI-Agent
         state: started
 
-    - name: Force first inventory
+    - name: Force first inventory (visible, debug)
       win_command: >
         "C:\\Program Files\\GLPI-Agent\\glpi-agent.bat"
         --server http://172.16.10.234:7932/marketplace/glpiinventory/
