@@ -12,8 +12,7 @@
       win_package:
         path: "C:\\Temp\\GLPI-Agent-1.15-x64.msi"
         state: present
-        arguments: 'ALLUSERS=1'
-        product_id: ''
+        arguments: '/quiet ALLUSERS=1 DISPLAYLEVEL=0'   # видимо для всех пользователей, не скрыто
 
     - name: Configure GLPI-Agent server via batch
       win_command: >
@@ -29,7 +28,6 @@
         $regValue = "http://172.16.10.234:7932/marketplace/glpiinventory/"
         if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
         Set-ItemProperty -Path $regPath -Name $regName -Value $regValue -Type String
-      become: yes
 
     - name: Enable GLPI-Agent service autostart
       win_service:
@@ -41,7 +39,7 @@
         name: GLPI-Agent
         state: started
 
-    - name: Force first inventory (visible, debug)
+    - name: Force first inventory (debug mode)
       win_command: >
         "C:\\Program Files\\GLPI-Agent\\glpi-agent.bat"
         --server http://172.16.10.234:7932/marketplace/glpiinventory/
