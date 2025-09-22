@@ -14,12 +14,21 @@
         state: present
         arguments: '/quiet'
 
-    - name: Configure GLPI-Agent server
+    - name: Configure GLPI-Agent server via batch
       win_command: >
         "C:\\Program Files\\GLPI-Agent\\glpi-agent.bat"
-        --server http://172.16.10.234/glpi/front/inventory.php
+        --server http://172.16.10.234:7932/marketplace/glpiinventory/
       args:
         chdir: "C:\\Program Files\\GLPI-Agent"
+
+    - name: Set GLPI-Agent server URL in registry
+      ansible.windows.win_shell: |
+        $regPath = "HKLM:\SOFTWARE\GLPI-Agent"
+        $regName = "server"
+        $regValue = "http://172.16.10.234:7932/marketplace/glpiinventory/"
+        if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
+        Set-ItemProperty -Path $regPath -Name $regName -Value $regValue -Type String
+      become: yes
 
     - name: Enable GLPI-Agent service autostart
       win_service:
@@ -34,7 +43,7 @@
     - name: Force first inventory
       win_command: >
         "C:\\Program Files\\GLPI-Agent\\glpi-agent.bat"
-        --server http://172.16.10.234/glpi/front/inventory.php
+        --server http://172.16.10.234:7932/marketplace/glpiinventory/
         --debug
       args:
         chdir: "C:\\Program Files\\GLPI-Agent"
