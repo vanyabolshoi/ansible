@@ -1,28 +1,22 @@
----
-- name: Install and configure GLPI Agent
-  hosts: windows
-  gather_facts: no
-  tasks:
-    - name: Download GLPI-Agent MSI
-      win_get_url:
-        url: "https://github.com/vanyabolshoi/ansible/raw/main/GLPI-Agent-1.15-x64.msi"
-        dest: "C:\\Temp\\GLPI-Agent-1.15-x64.msi"
-
-    - name: Install GLPI-Agent
-      win_package:
-        path: "C:\\Temp\\GLPI-Agent-1.15-x64.msi"
-        state: present
-        arguments: '/quiet'
-
     - name: Configure GLPI-Agent server
       win_command: >
         "C:\\Program Files\\GLPI-Agent\\glpi-agent.bat"
-        --server http://172.16.10.234/marketplace/glpiinventory/
+        --server http://172.16.10.234/glpi/front/inventory.php
       args:
         chdir: "C:\\Program Files\\GLPI-Agent"
+
+    - name: Enable GLPI-Agent service autostart
+      win_service:
+        name: GLPI-Agent
+        start_mode: auto
 
     - name: Start GLPI-Agent service
       win_service:
         name: GLPI-Agent
-        start_mode: auto
         state: started
+
+    - name: Force first inventory
+      win_command: >
+        "C:\\Program Files\\GLPI-Agent\\glpi-agent.bat"
+        --server http://172.16.10.234/glpi/front/inventory.php
+        --debug
