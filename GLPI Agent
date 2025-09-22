@@ -5,7 +5,6 @@
   become: yes
   become_method: runas
   become_user: Admin
-  become_password: "Pharmacia_"
   tasks:
     - name: Download GLPI-Agent MSI
       win_get_url:
