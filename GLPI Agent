@@ -2,9 +2,6 @@
 - name: Install and configure GLPI Agent
   hosts: windows
   gather_facts: no
-  become: yes
-  become_method: runas
-  become_user: Admin
   tasks:
     - name: Download GLPI-Agent MSI
       win_get_url:
