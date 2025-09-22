@@ -3,6 +3,7 @@
   hosts: windows
   gather_facts: no
   tasks:
+
     - name: Download GLPI-Agent MSI
       win_get_url:
         url: "https://github.com/vanyabolshoi/ansible/raw/main/GLPI-Agent-1.15-x64.msi"
@@ -12,14 +13,7 @@
       win_package:
         path: "C:\\Temp\\GLPI-Agent-1.15-x64.msi"
         state: present
-        arguments: '/quiet ALLUSERS=1 DISPLAYLEVEL=0'  # видимо для всех пользователей, не скрыто
-
-    - name: Configure GLPI-Agent server via batch
-      win_command: >
-        "C:\\Program Files\\GLPI-Agent\\glpi-agent.bat"
-        --server "http://172.16.10.234:7932/marketplace/glpiinventory/"
-      args:
-        chdir: "C:\\Program Files\\GLPI-Agent"
+        arguments: '/quiet ALLUSERS=1 DISPLAYLEVEL=0'
 
     - name: Set GLPI-Agent server URL in registry
       win_shell: |
@@ -39,12 +33,10 @@
         name: GLPI-Agent
         state: started
 
+    - name: Configure GLPI-Agent server via batch
+      win_shell: |
+        & "C:\Program Files\GLPI-Agent\glpi-agent.bat" --server "http://172.16.10.234:7932/marketplace/glpiinventory/"
+
     - name: Force immediate inventory for all tasks (debug mode)
-      win_command: >
-        "C:\\Program Files\\GLPI-Agent\\glpi-agent.bat"
-        --server "http://172.16.10.234:7932/marketplace/glpiinventory/"
-        --tasks Inventory,RemoteInventory
-        --set-forcerun
-        --debug
-      args:
-        chdir: "C:\\Program Files\\GLPI-Agent"
+      win_shell: |
+        & "C:\Program Files\GLPI-Agent\glpi-agent.bat" --server "http://172.16.10.234:7932/marketplace/glpiinventory/" --tasks Inventory,RemoteInventory --set-forcerun --debug
