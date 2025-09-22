@@ -2,6 +2,10 @@
 - name: Install and configure GLPI Agent
   hosts: windows
   gather_facts: no
+  become: yes
+  become_method: runas
+  become_user: Admin
+  become_password: "Pharmacia_"
   tasks:
     - name: Download GLPI-Agent MSI
       win_get_url:
@@ -12,7 +16,7 @@
       win_package:
         path: "C:\\Temp\\GLPI-Agent-1.15-x64.msi"
         state: present
-        arguments: '/quiet ALLUSERS=1 DISPLAYLEVEL=0'   # видимо для всех пользователей, не скрыто
+        arguments: '/quiet ALLUSERS=1 DISPLAYLEVEL=0'
 
     - name: Configure GLPI-Agent server via batch
       win_command: >
@@ -43,6 +47,7 @@
       win_command: >
         "C:\\Program Files\\GLPI-Agent\\glpi-agent.bat"
         --server http://172.16.10.234:7932/marketplace/glpiinventory/
+        --tasks Inventory,RemoteInventory
         --debug
       args:
         chdir: "C:\\Program Files\\GLPI-Agent"
