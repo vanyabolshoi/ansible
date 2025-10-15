@@ -1,9 +1,20 @@
 ---
 - name: Проверить Windows 11 и наличие KB5066793
   hosts: windows
-  gather_facts: yes
+  gather_facts: no
+  any_errors_fatal: false
 
   tasks:
+    - name: Проверить доступность хоста (таймаут 5 сек)
+      wait_for_connection:
+        timeout: 5
+      register: ping_status
+      ignore_errors: true
+
+    - name: Пропустить недоступные хосты
+      meta: end_host
+      when: ping_status is failed
+
     - name: Получить ProductName Windows
       win_shell: |
         (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name ProductName).ProductName
@@ -23,7 +34,7 @@
 
     - name: Сохранить IP если KB найден
       set_fact:
-        matched_ip: "{{ ansible_facts.ansible_default_ipv4.address }}"
+        matched_ip: "{{ ansible_host }}"
       when: kb11.stdout | trim != ''
 
     - name: Добавить IP в группу подходящих хостов
