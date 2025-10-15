@@ -1,0 +1,65 @@
+---
+- name: Проверить Windows версию и наличие KB, вывести IP если условие выполняется
+  hosts: windows_hosts
+  gather_facts: yes              # собираем факты, чтобы получить ansible_default_ipv4.address
+  tasks:
+
+    - name: Получить ProductName Windows (например "Windows 10 Pro" / "Windows 11 Pro")
+      win_shell: |
+        (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name ProductName).ProductName
+      register: product_name
+      changed_when: false
+
+    - name: Нормализовать ProductName (lowercase) для условий
+      set_fact:
+        product_name_clean: "{{ product_name.stdout | default('') | trim() | lower() }}"
+
+    - name: Проверить наличие KB5066791 (для Windows 10)
+      win_shell: |
+        try {
+          (Get-HotFix -Id KB5066791 -ErrorAction Stop).HotFixID
+        } catch {
+          ''
+        }
+      register: kb_5066791
+      changed_when: false
+      when: "'windows 10' in product_name_clean"
+
+    - name: Проверить наличие KB5066793 (для Windows 11)
+      win_shell: |
+        try {
+          (Get-HotFix -Id KB5066793 -ErrorAction Stop).HotFixID
+        } catch {
+          ''
+        }
+      register: kb_5066793
+      changed_when: false
+      when: "'windows 11' in product_name_clean"
+
+    - name: Вывести IP, если Windows 10 и установлен KB5066791
+      debug:
+        msg: "Host {{ inventory_hostname }}: Windows 10 с KB5066791 — IP: {{ ansible_facts.ansible_default_ipv4.address | default('IP не найден') }}"
+      when:
+        - "'windows 10' in product_name_clean"
+        - kb_5066791.stdout is defined
+        - (kb_5066791.stdout | trim) != ''
+
+    - name: Вывести IP, если Windows 11 и установлен KB5066793
+      debug:
+        msg: "Host {{ inventory_hostname }}: Windows 11 с KB5066793 — IP: {{ ansible_facts.ansible_default_ipv4.address | default('IP не найден') }}"
+      when:
+        - "'windows 11' in product_name_clean"
+        - kb_5066793.stdout is defined
+        - (kb_5066793.stdout | trim) != ''
+
+    - name: Сообщить, если не найдено требуемого KB или версия отлична
+      debug:
+        msg: >-
+          Host {{ inventory_hostname }}: ProductName='{{ product_name.stdout | default('') }}'.
+          KB для этой версии не установлен (или не та версия).
+      when: >
+        not (
+          ('windows 10' in product_name_clean and kb_5066791.stdout is defined and (kb_5066791.stdout | trim) != '')
+          or
+          ('windows 11' in product_name_clean and kb_5066793.stdout is defined and (kb_5066793.stdout | trim) != '')
+        )
