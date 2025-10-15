@@ -1,10 +1,7 @@
 ---
-- name: Проверить KB и вывести IP всех подходящих хостов
+- name: Проверить Windows 11 и наличие KB5066793
   hosts: windows
   gather_facts: yes
-
-  vars:
-    results: []
 
   tasks:
     - name: Получить ProductName Windows
@@ -17,33 +14,19 @@
       set_fact:
         product_name_clean: "{{ product_name.stdout | default('') | trim() | lower() }}"
 
-    - name: Проверить наличие KB для Windows 10
-      win_shell: |
-        try { (Get-HotFix -Id KB5066791 -ErrorAction Stop).HotFixID } catch { '' }
-      register: kb10
-      changed_when: false
-      when: "'windows 10' in product_name_clean"
-
-    - name: Проверить наличие KB для Windows 11
+    - name: Проверить наличие KB5066793 (только если Windows 11)
       win_shell: |
         try { (Get-HotFix -Id KB5066793 -ErrorAction Stop).HotFixID } catch { '' }
       register: kb11
       changed_when: false
       when: "'windows 11' in product_name_clean"
 
-    - name: Сохранить результат, если найден нужный KB
-      set_fact:
-        kb_match: true
-      when: >
-        ('windows 10' in product_name_clean and kb10.stdout | trim != '') or
-        ('windows 11' in product_name_clean and kb11.stdout | trim != '')
-
-    - name: Сохранить IP подходящего хоста
+    - name: Сохранить IP если KB найден
       set_fact:
         matched_ip: "{{ ansible_facts.ansible_default_ipv4.address }}"
-      when: kb_match is defined and kb_match
+      when: kb11.stdout | trim != ''
 
-    - name: Собрать IP всех подходящих хостов
+    - name: Добавить IP в группу подходящих хостов
       add_host:
         name: "{{ inventory_hostname }}"
         groups: matched_hosts
@@ -53,8 +36,18 @@
 - name: Вывести итоговый список IP
   hosts: matched_hosts
   gather_facts: no
-  tasks:
-    - name: Показать IP всех хостов, у которых найден нужный KB
-      debug:
-        msg: "{{ inventory_hostname }} -> {{ hostvars[inventory_hostname]['ip'] }}"
   run_once: true
+  tasks:
+    - name: Собрать все IP
+      set_fact:
+        all_ips: "{{ groups['matched_hosts'] | map('extract', hostvars, ['ip']) | select('defined') | list }}"
+
+    - name: Показать IP по одному в строке
+      debug:
+        msg: "{{ all_ips | join('\n') }}"
+
+    - name: Сохранить IP в файл на контроллере
+      local_action:
+        module: copy
+        content: "{{ all_ips | join('\n') }}"
+        dest: /tmp/kb5066793_hosts.txt
