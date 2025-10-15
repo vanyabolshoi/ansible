@@ -1,7 +1,10 @@
 ---
-- name: Проверить Windows версию и наличие KB, вывести IP если условие выполняется
-  hosts: windows        # ← теперь совпадает с твоим inventory
+- name: Проверить KB и вывести IP всех подходящих хостов
+  hosts: windows
   gather_facts: yes
+
+  vars:
+    results: []
 
   tasks:
     - name: Получить ProductName Windows
@@ -14,43 +17,44 @@
       set_fact:
         product_name_clean: "{{ product_name.stdout | default('') | trim() | lower() }}"
 
-    - name: Проверить наличие KB5066791 (для Windows 10)
+    - name: Проверить наличие KB для Windows 10
       win_shell: |
         try { (Get-HotFix -Id KB5066791 -ErrorAction Stop).HotFixID } catch { '' }
-      register: kb_5066791
+      register: kb10
       changed_when: false
       when: "'windows 10' in product_name_clean"
 
-    - name: Проверить наличие KB5066793 (для Windows 11)
+    - name: Проверить наличие KB для Windows 11
       win_shell: |
         try { (Get-HotFix -Id KB5066793 -ErrorAction Stop).HotFixID } catch { '' }
-      register: kb_5066793
+      register: kb11
       changed_when: false
       when: "'windows 11' in product_name_clean"
 
-    - name: Вывести IP, если Windows 10 и установлен KB5066791
-      debug:
-        msg: "Host {{ inventory_hostname }}: Windows 10 с KB5066791 — IP: {{ ansible_facts.ansible_default_ipv4.address | default('IP не найден') }}"
-      when:
-        - "'windows 10' in product_name_clean"
-        - kb_5066791.stdout is defined
-        - (kb_5066791.stdout | trim) != ''
-
-    - name: Вывести IP, если Windows 11 и установлен KB5066793
-      debug:
-        msg: "Host {{ inventory_hostname }}: Windows 11 с KB5066793 — IP: {{ ansible_facts.ansible_default_ipv4.address | default('IP не найден') }}"
-      when:
-        - "'windows 11' in product_name_clean"
-        - kb_5066793.stdout is defined
-        - (kb_5066793.stdout | trim) != ''
-
-    - name: Сообщить, если KB не найден
-      debug:
-        msg: >-
-          Host {{ inventory_hostname }}: {{ product_name.stdout | default('не определён') }},
-          нужный KB не найден или версия Windows не совпадает.
+    - name: Сохранить результат, если найден нужный KB
+      set_fact:
+        kb_match: true
       when: >
-        not (
-          ('windows 10' in product_name_clean and kb_5066791.stdout is defined and (kb_5066791.stdout | trim) != '') or
-          ('windows 11' in product_name_clean and kb_5066793.stdout is defined and (kb_5066793.stdout | trim) != '')
-        )
+        ('windows 10' in product_name_clean and kb10.stdout | trim != '') or
+        ('windows 11' in product_name_clean and kb11.stdout | trim != '')
+
+    - name: Сохранить IP подходящего хоста
+      set_fact:
+        matched_ip: "{{ ansible_facts.ansible_default_ipv4.address }}"
+      when: kb_match is defined and kb_match
+
+    - name: Собрать IP всех подходящих хостов
+      add_host:
+        name: "{{ inventory_hostname }}"
+        groups: matched_hosts
+        ip: "{{ matched_ip }}"
+      when: matched_ip is defined
+
+- name: Вывести итоговый список IP
+  hosts: matched_hosts
+  gather_facts: no
+  tasks:
+    - name: Показать IP всех хостов, у которых найден нужный KB
+      debug:
+        msg: "{{ inventory_hostname }} -> {{ hostvars[inventory_hostname]['ip'] }}"
+  run_once: true
