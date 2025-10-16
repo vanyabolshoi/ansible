@@ -6,11 +6,12 @@
     timeout_seconds: 5
 
   tasks:
-    - name: Проверить доступность хоста (таймаут 5 сек)
+    - name: Проверить доступность WinRM (таймаут 5 сек)
       ansible.builtin.wait_for:
         host: "{{ inventory_hostname }}"
         port: 5985
         timeout: "{{ timeout_seconds }}"
+      delegate_to: localhost
       register: ping_result
       ignore_errors: yes
 
@@ -38,7 +39,6 @@
         msg: "✅ {{ inventory_hostname }} — KB5066793 установлено ({{ os_name }})"
       when:
         - "'Windows 11' in os_name"
-        - kb11 is defined
         - kb11.stdout is defined
         - kb11.stdout | trim != ''
 
@@ -47,5 +47,5 @@
         msg: "❌ {{ inventory_hostname }} — KB5066793 не найдено ({{ os_name }})"
       when:
         - "'Windows 11' in os_name"
-        - kb11 is defined
-        - (kb11.stdout | trim == '') or (kb11.rc != 0)
+        - kb11.stdout is defined
+        - kb11.stdout | trim == ''
