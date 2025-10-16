@@ -24,7 +24,7 @@
 
     - name: Вывести версию Windows
       debug:
-        msg: "{{ inventory_hostname }} — {{ sysinfo_raw.stdout_lines | select('search','OS Name') | list }} , {{ sysinfo_raw.stdout_lines | select('search','OS Version') | list }}"
+        msg: "{{ inventory_hostname }} — {{ sysinfo_raw.stdout_lines | select('search','OS Name') | list }}, {{ sysinfo_raw.stdout_lines | select('search','OS Version') | list }}"
 
     - name: Проверить наличие KB5066793 (только если Windows 11)
       ansible.windows.win_shell: |
@@ -34,12 +34,12 @@
       failed_when: false
       when: sysinfo_raw.stdout is search('Windows 11')
 
-    - name: Добавить хост в список найденных
+    - name: Добавить хост в соответствующий список
       set_fact:
         found_hosts: "{{ found_hosts + [inventory_hostname] }}"
       when: kb_check.stdout is search('FOUND')
 
-    - name: Добавить хост в список отсутствующих
+    - name: Добавить хост в список отсутствующих (только если KB не найден)
       set_fact:
         not_found_hosts: "{{ not_found_hosts + [inventory_hostname] }}"
       when: kb_check.stdout is search('NOT_FOUND')
