@@ -65,12 +65,9 @@
         - sysinfo_raw.stdout is search('Windows 11')
         - kb_check.stdout is search('NOT_FOUND')
 
-  # Сводный отчёт по всем хостам (выполняется один раз)
-  run_once: true
-  tasks:
     - name: Сводный отчёт
       ansible.builtin.debug:
         msg: |
           🧾 Отчёт по проверке KB {{ kb_id }}:
-          ✅ Установлено на: {{ hostvars | dict2items | selectattr('value.found_hosts', 'defined') | map(attribute='value.found_hosts') | flatten | unique | join(', ') | default('нет') }}
-          ❌ Отсутствует на: {{ hostvars | dict2items | selectattr('value.not_found_hosts', 'defined') | map(attribute='value.not_found_hosts') | flatten | unique | join(', ') | default('нет') }}
+          ✅ Установлено на: {{ found_hosts | join(', ') | default('нет') }}
+          ❌ Отсутствует на: {{ not_found_hosts | join(', ') | default('нет') }}
