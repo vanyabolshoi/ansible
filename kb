@@ -39,10 +39,6 @@
         found_hosts: "{{ found_hosts + [inventory_hostname] }}"
       when: kb_check.stdout is search('FOUND')
 
-    - name: Добавить хост в список отсутствующих (только если KB не найден)
-      set_fact:
-        not_found_hosts: "{{ not_found_hosts + [inventory_hostname] }}"
-      when: kb_check.stdout is search('NOT_FOUND')
 
     - name: Сводный отчёт
       debug:
