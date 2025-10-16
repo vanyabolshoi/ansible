@@ -26,23 +26,16 @@
       debug:
         msg: "{{ inventory_hostname }} — {{ sysinfo_raw.stdout_lines | select('search','OS Name') | list }}, {{ sysinfo_raw.stdout_lines | select('search','OS Version') | list }}"
 
-    - name: Проверить наличие KB5066793 (только если Windows 11)
-      ansible.windows.win_shell: |
-        $kb = Get-HotFix -Id {{ kb_id }} -ErrorAction SilentlyContinue
-        if ($kb) { Write-Output "FOUND" } else { Write-Output "NOT_FOUND" }
-      register: kb_check
-      failed_when: false
-      when: sysinfo_raw.stdout is search('Windows 11')
-
-    - name: Добавить хост в соответствующий список
-      set_fact:
-        found_hosts: "{{ found_hosts + [inventory_hostname] }}"
-      when: kb_check.stdout is search('FOUND')
+    - name: Проверить наличие обновления KB5066791
+      ansible.windows.win_powershell:
+        script: |
+          $kb = Get-HotFix | Where-Object {$_.HotFixID -eq "KB5066791"}
+          if ($kb) {
+              Write-Output "FOUND"
 
 
-    - name: Сводный отчёт
+     - name: Сообщить результат
       debug:
-        msg: |
-          🧾 Отчёт по проверке KB {{ kb_id }}:
-          ✅ Установлено на: {{ found_hosts | join(', ') if found_hosts | length > 0 else 'нет' }}
-          ❌ Отсутствует на: {{ not_found_hosts | join(', ') if not_found_hosts | length > 0 else 'нет' }}
+        msg: >
+          {{ 'Обновление найдено' if 'FOUND' in kb_check.output
+             else 'Обновление KB5066791 не найдено, действий не требуется' }}
