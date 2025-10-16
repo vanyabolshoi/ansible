@@ -30,9 +30,7 @@
       ansible.windows.win_powershell:
         script: |
           $kb = Get-HotFix | Where-Object {$_.HotFixID -eq "{{ kb_id }}"}
-          if ($kb) {
-              Write-Output "FOUND"
-          }
+          if ($kb) { Write-Output "FOUND" }
       register: kb_check
       ignore_errors: yes
 
