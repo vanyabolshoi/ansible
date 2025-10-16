@@ -1,64 +1,51 @@
 ---
 - name: Проверить Windows 11 и наличие KB5066793
-  hosts: windows
+  hosts: all
   gather_facts: no
-  any_errors_fatal: false
+  vars:
+    timeout_seconds: 5
 
   tasks:
     - name: Проверить доступность хоста (таймаут 5 сек)
-      wait_for_connection:
-        timeout: 5
-      register: ping_status
-      ignore_errors: true
+      ansible.builtin.wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 5985
+        timeout: "{{ timeout_seconds }}"
+      register: ping_result
+      ignore_errors: yes
 
     - name: Пропустить недоступные хосты
-      meta: end_host
-      when: ping_status is failed
+      ansible.builtin.meta: end_host
+      when: ping_result is failed
 
     - name: Получить ProductName Windows
-      win_shell: |
-        (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name ProductName).ProductName
-      register: product_name
-      changed_when: false
+      ansible.windows.win_shell: |
+        (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ProductName
+      register: os_name_raw
 
     - name: Нормализовать ProductName
       set_fact:
-        product_name_clean: "{{ product_name.stdout | default('') | trim() | lower() }}"
+        os_name: "{{ os_name_raw.stdout | trim }}"
 
     - name: Проверить наличие KB5066793 (только если Windows 11)
-      win_shell: |
-        try { (Get-HotFix -Id KB5066793 -ErrorAction Stop).HotFixID } catch { '' }
+      ansible.windows.win_shell: |
+        Get-HotFix -Id KB5066793 -ErrorAction SilentlyContinue
       register: kb11
-      changed_when: false
-      when: "'windows 11' in product_name_clean"
+      when: "'Windows 11' in os_name"
 
-    - name: Сохранить IP если KB найден
-      set_fact:
-        matched_ip: "{{ ansible_host }}"
-      when: kb11.stdout | trim != ''
+    - name: Вывести IP если KB найден
+      ansible.builtin.debug:
+        msg: "✅ {{ inventory_hostname }} — KB5066793 установлено ({{ os_name }})"
+      when:
+        - "'Windows 11' in os_name"
+        - kb11 is defined
+        - kb11.stdout is defined
+        - kb11.stdout | trim != ''
 
-    - name: Добавить IP в группу подходящих хостов
-      add_host:
-        name: "{{ inventory_hostname }}"
-        groups: matched_hosts
-        ip: "{{ matched_ip }}"
-      when: matched_ip is defined
-
-- name: Вывести итоговый список IP
-  hosts: matched_hosts
-  gather_facts: no
-  run_once: true
-  tasks:
-    - name: Собрать все IP
-      set_fact:
-        all_ips: "{{ groups['matched_hosts'] | map('extract', hostvars, ['ip']) | select('defined') | list }}"
-
-    - name: Показать IP по одному в строке
-      debug:
-        msg: "{{ all_ips | join('\n') }}"
-
-    - name: Сохранить IP в файл на контроллере
-      local_action:
-        module: copy
-        content: "{{ all_ips | join('\n') }}"
-        dest: /tmp/kb5066793_hosts.txt
+    - name: Вывести IP если KB отсутствует
+      ansible.builtin.debug:
+        msg: "❌ {{ inventory_hostname }} — KB5066793 не найдено ({{ os_name }})"
+      when:
+        - "'Windows 11' in os_name"
+        - kb11 is defined
+        - (kb11.stdout | trim == '') or (kb11.rc != 0)
