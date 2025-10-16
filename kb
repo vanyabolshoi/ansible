@@ -37,5 +37,5 @@
     - name: Сообщить результат
       debug:
         msg: >
-          {{ '✅ ' + inventory_hostname + ' — KB5066793 установлено' if 'FOUND' in kb_check.stdout
+          {{ '✅ ' + inventory_hostname + ' — KB5066793 установлено' if kb_check.stdout is defined and 'FOUND' in kb_check.stdout
              else '❌ ' + inventory_hostname + ' — KB5066793 не найдено' }}
