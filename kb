@@ -3,49 +3,74 @@
   hosts: all
   gather_facts: no
   vars:
-    timeout_seconds: 5
+    kb_id: "KB5066793"
+    found_hosts: []
+    not_found_hosts: []
 
   tasks:
     - name: Проверить доступность WinRM (таймаут 5 сек)
       ansible.builtin.wait_for:
         host: "{{ inventory_hostname }}"
         port: 5985
-        timeout: "{{ timeout_seconds }}"
+        timeout: 5
       delegate_to: localhost
-      register: ping_result
+      register: winrm_check
       ignore_errors: yes
 
     - name: Пропустить недоступные хосты
-      ansible.builtin.meta: end_host
-      when: ping_result is failed
+      meta: end_host
+      when: winrm_check.failed is defined and winrm_check.failed
 
     - name: Получить информацию о системе
-      ansible.windows.win_shell: |
-        systeminfo | findstr /B /C:"OS Name" /C:"OS Version"
+      ansible.windows.win_shell: systeminfo
       register: sysinfo_raw
 
     - name: Вывести версию Windows
       ansible.builtin.debug:
-        msg: "{{ inventory_hostname }} — {{ sysinfo_raw.stdout_lines | join(', ') }}"
+        msg: "{{ inventory_hostname }} — {{ sysinfo_raw.stdout | regex_search('OS Name:\\s*(.+)\\n', '\\1') | default('Неизвестно') }}, OS Version: {{ sysinfo_raw.stdout | regex_search('OS Version:\\s*(.+)\\n', '\\1') | default('Неизвестно') }}"
 
-    - name: Проверить наличие KB5066793 (только если Windows 11)
+    - name: Проверить наличие {{ kb_id }} (только если Windows 11)
       ansible.windows.win_shell: |
-        Get-HotFix -Id KB5066793 -ErrorAction SilentlyContinue
-      register: kb11
+        $kb = Get-HotFix -Id {{ kb_id }} -ErrorAction SilentlyContinue
+        if ($kb) { Write-Output "FOUND" } else { Write-Output "NOT_FOUND" }
+      register: kb_check
       when: sysinfo_raw.stdout is search('Windows 11')
+      failed_when: false
 
     - name: Вывести IP если KB найден
       ansible.builtin.debug:
-        msg: "✅ {{ inventory_hostname }} — KB5066793 установлено"
+        msg: "✅ {{ inventory_hostname }} — {{ kb_id }} установлено"
       when:
         - sysinfo_raw.stdout is search('Windows 11')
-        - kb11.stdout is defined
-        - kb11.stdout | trim != ''
+        - kb_check.stdout is search('FOUND')
+
+    - name: Добавить хост в список найденных
+      set_fact:
+        found_hosts: "{{ found_hosts + [inventory_hostname] }}"
+      when:
+        - sysinfo_raw.stdout is search('Windows 11')
+        - kb_check.stdout is search('FOUND')
 
     - name: Вывести IP если KB отсутствует
       ansible.builtin.debug:
-        msg: "❌ {{ inventory_hostname }} — KB5066793 не найдено"
+        msg: "❌ {{ inventory_hostname }} — {{ kb_id }} не найдено"
       when:
         - sysinfo_raw.stdout is search('Windows 11')
-        - kb11.stdout is defined
-        - kb11.stdout | trim == ''
+        - kb_check.stdout is search('NOT_FOUND')
+
+    - name: Добавить хост в список отсутствующих
+      set_fact:
+        not_found_hosts: "{{ not_found_hosts + [inventory_hostname] }}"
+      when:
+        - sysinfo_raw.stdout is search('Windows 11')
+        - kb_check.stdout is search('NOT_FOUND')
+
+  # Сводный отчёт по всем хостам (выполняется один раз)
+  run_once: true
+  tasks:
+    - name: Сводный отчёт
+      ansible.builtin.debug:
+        msg: |
+          🧾 Отчёт по проверке KB {{ kb_id }}:
+          ✅ Установлено на: {{ hostvars | dict2items | selectattr('value.found_hosts', 'defined') | map(attribute='value.found_hosts') | flatten | unique | join(', ') | default('нет') }}
+          ❌ Отсутствует на: {{ hostvars | dict2items | selectattr('value.not_found_hosts', 'defined') | map(attribute='value.not_found_hosts') | flatten | unique | join(', ') | default('нет') }}
