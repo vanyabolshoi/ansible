@@ -26,16 +26,18 @@
       debug:
         msg: "{{ inventory_hostname }} — {{ sysinfo_raw.stdout_lines | select('search','OS Name') | list }}, {{ sysinfo_raw.stdout_lines | select('search','OS Version') | list }}"
 
-    - name: Проверить наличие обновления KB5066791
+    - name: Проверить наличие обновления KB5066793
       ansible.windows.win_powershell:
         script: |
-          $kb = Get-HotFix | Where-Object {$_.HotFixID -eq "KB5066791"}
+          $kb = Get-HotFix | Where-Object {$_.HotFixID -eq "{{ kb_id }}"}
           if ($kb) {
               Write-Output "FOUND"
+          }
+      register: kb_check
+      ignore_errors: yes
 
-
-     - name: Сообщить результат
+    - name: Сообщить результат
       debug:
         msg: >
-          {{ 'Обновление найдено' if 'FOUND' in kb_check.output
-             else 'Обновление KB5066791 не найдено, действий не требуется' }}
+          {{ '✅ ' + inventory_hostname + ' — KB5066793 установлено' if 'FOUND' in kb_check.stdout
+             else '❌ ' + inventory_hostname + ' — KB5066793 не найдено' }}
