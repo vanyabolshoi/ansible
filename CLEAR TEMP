@@ -21,13 +21,13 @@
               echo -------------------------------
               echo Clearing profile: %%U
 
-              call :CleanFolder "%%U\AppData\Local\Temp"
-              call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\INetCache"
-              call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\Temporary Internet Files"
+              call :CleanFolder %%U\AppData\Local\Temp
+              call :CleanFolder %%U\AppData\Local\Microsoft\Windows\INetCache
+              call :CleanFolder %%U\AppData\Local\Microsoft\Windows\Temporary Internet Files
           )
 
           echo Clearing system TEMP...
-          call :CleanFolder "C:\Windows\Temp"
+          call :CleanFolder C:\Windows\Temp
 
           echo Done
           exit
