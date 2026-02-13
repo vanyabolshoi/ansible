@@ -1,11 +1,11 @@
 ---
-- name: Find users who have not logged in since 2024 (fast method)
+- name: Find users who have not logged in since 2024 with size
   hosts: windows
   gather_facts: no
 
   tasks:
 
-    - name: Get old user folders
+    - name: Get old user folders with size
       win_shell: |
         $limitDate = Get-Date "2024-01-01"
 
@@ -14,8 +14,18 @@
             $_.Name -notin @('Public','Default','Default User','All Users','Administrator') -and
             $_.LastWriteTime -lt $limitDate
         } |
-        Select-Object FullName, LastWriteTime |
-        Sort-Object LastWriteTime |
+        ForEach-Object {
+
+            $size = (Get-ChildItem $_.FullName -Recurse -Force -ErrorAction SilentlyContinue |
+                     Measure-Object -Property Length -Sum).Sum
+
+            [PSCustomObject]@{
+                UserFolder = $_.FullName
+                LastWrite  = $_.LastWriteTime
+                SizeGB     = "{0:N2}" -f ($size / 1GB)
+            }
+        } |
+        Sort-Object LastWrite |
         Format-Table -AutoSize
 
       register: old_users
