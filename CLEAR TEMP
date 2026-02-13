@@ -1,0 +1,63 @@
+@echo off
+setlocal EnableDelayedExpansion
+
+echo ================================
+echo  Очистка TEMP всех пользователей
+echo ================================
+
+:: Проверка запуска от администратора
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Запустите файл ОТ ИМЕНИ АДМИНИСТРАТОРА!
+    pause
+    exit
+)
+
+echo.
+echo Завершаем потенциально мешающие процессы...
+taskkill /f /im chrome.exe >nul 2>&1
+taskkill /f /im msedge.exe >nul 2>&1
+taskkill /f /im firefox.exe >nul 2>&1
+taskkill /f /im iexplore.exe >nul 2>&1
+
+echo.
+echo Обработка профилей пользователей...
+
+for /d %%U in (C:\Users\*) do (
+    set USERPATH=%%U
+    echo -------------------------------
+    echo Очистка профиля: %%U
+
+    call :CleanFolder "%%U\AppData\Local\Temp"
+    call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\INetCache"
+    call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\Temporary Internet Files"
+)
+
+echo.
+echo Очистка системного TEMP...
+call :CleanFolder "C:\Windows\Temp"
+
+echo.
+echo Готово.
+pause
+exit
+
+:CleanFolder
+set FOLDER=%~1
+
+if exist "%FOLDER%" (
+    echo Очистка %FOLDER%
+
+    :: Снимаем атрибуты
+    attrib -r -s -h "%FOLDER%\*" /s /d >nul 2>&1
+
+    :: Удаляем файлы
+    del /f /s /q "%FOLDER%\*" >nul 2>&1
+
+    :: Удаляем папки
+    for /d %%D in ("%FOLDER%\*") do (
+        rd /s /q "%%D" >nul 2>&1
+    )
+)
+
+exit /b
