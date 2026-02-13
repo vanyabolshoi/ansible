@@ -1,0 +1,9 @@
+- name: Get last modification date of user folders
+  win_shell: |
+    Get-ChildItem C:\Users -Directory |
+    Select-Object FullName, LastWriteTime |
+    Sort-Object LastWriteTime -Descending
+  register: user_dates
+
+- debug:
+    var: user_dates.stdout_lines
