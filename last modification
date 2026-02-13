@@ -1,20 +1,27 @@
 ---
-- name: Get last modification date of user folders
+- name: Find users who have not logged in since 2024
   hosts: windows
   gather_facts: no
 
   tasks:
 
-    - name: Get last modification date of user folders
+    - name: Get user profiles not used since 2024
       win_shell: |
-        Get-ChildItem C:\Users -Directory |
+        $limitDate = Get-Date "2024-01-01"
+
+        Get-CimInstance Win32_UserProfile |
         Where-Object {
-            $_.Name -notin @("Public","Default","Default User","All Users")
+            $_.Special -eq $false -and
+            $_.LastUseTime -ne $null -and
+            ([Management.ManagementDateTimeConverter]::ToDateTime($_.LastUseTime) -lt $limitDate)
         } |
-        Select-Object FullName, LastWriteTime |
-        Sort-Object LastWriteTime -Descending
-      register: user_dates
+        Select-Object LocalPath,
+            @{Name="LastUsed";Expression={[Management.ManagementDateTimeConverter]::ToDateTime($_.LastUseTime)}} |
+        Sort-Object LastUsed |
+        Format-Table -AutoSize
+
+      register: old_users
 
     - name: Show result
       debug:
-        var: user_dates.stdout_lines
+        var: old_users.stdout_lines
