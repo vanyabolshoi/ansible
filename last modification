@@ -1,35 +1,42 @@
 ---
-- name: Find users who have not logged in since 2024 with fast size calc
+- name: Find users who have not logged in since 2024 with individual size
   hosts: windows
   gather_facts: no
 
   tasks:
 
-    - name: Get old user folders with size (fast)
+    - name: Get old user folders with individual size
       win_shell: |
         $limitDate = Get-Date "2024-01-01"
 
+        $exclude = @('Public','Default','Default User','All Users','Administrator')
+
         Get-ChildItem C:\Users -Directory |
         Where-Object {
-            $_.Name -notin @('Public','Default','Default User','All Users','Administrator') -and
+            $_.Name -notin $exclude -and
             $_.LastWriteTime -lt $limitDate
         } |
         ForEach-Object {
 
             $folder = $_.FullName
 
-            $robocopy = robocopy $folder NULL /L /S /NJH /NJS /BYTES /NC /NDL /NFL 2>$null
-            $bytes = ($robocopy | Select-String "Bytes :").ToString().Split(":")[1].Trim()
+            # считаем размер конкретной папки
+            $result = robocopy $folder NULL /L /S /BYTES /NJH /NJS /NFL /NDL 2>$null
 
-            if (-not $bytes) { $bytes = 0 }
+            $bytes = 0
+            foreach ($line in $result) {
+                if ($line -match "Bytes :\s+(\d+)") {
+                    $bytes = [int64]$matches[1]
+                }
+            }
 
             [PSCustomObject]@{
                 UserFolder = $folder
                 LastWrite  = $_.LastWriteTime
-                SizeGB     = "{0:N2}" -f ([int64]$bytes / 1GB)
+                SizeGB     = "{0:N2}" -f ($bytes / 1GB)
             }
         } |
-        Sort-Object LastWrite |
+        Sort-Object SizeGB -Descending |
         Format-Table -AutoSize
 
       register: old_users
