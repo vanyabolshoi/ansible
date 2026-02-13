@@ -1,9 +1,20 @@
+---
 - name: Get last modification date of user folders
-  win_shell: |
-    Get-ChildItem C:\Users -Directory |
-    Select-Object FullName, LastWriteTime |
-    Sort-Object LastWriteTime -Descending
-  register: user_dates
+  hosts: windows
+  gather_facts: no
 
-- debug:
-    var: user_dates.stdout_lines
+  tasks:
+
+    - name: Get last modification date of user folders
+      win_shell: |
+        Get-ChildItem C:\Users -Directory |
+        Where-Object {
+            $_.Name -notin @("Public","Default","Default User","All Users")
+        } |
+        Select-Object FullName, LastWriteTime |
+        Sort-Object LastWriteTime -Descending
+      register: user_dates
+
+    - name: Show result
+      debug:
+        var: user_dates.stdout_lines
