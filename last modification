@@ -1,11 +1,11 @@
 ---
-- name: Find users who have not logged in since 2024 with size
+- name: Find users who have not logged in since 2024 with fast size calc
   hosts: windows
   gather_facts: no
 
   tasks:
 
-    - name: Get old user folders with size
+    - name: Get old user folders with size (fast)
       win_shell: |
         $limitDate = Get-Date "2024-01-01"
 
@@ -16,13 +16,17 @@
         } |
         ForEach-Object {
 
-            $size = (Get-ChildItem $_.FullName -Recurse -Force -ErrorAction SilentlyContinue |
-                     Measure-Object -Property Length -Sum).Sum
+            $folder = $_.FullName
+
+            $robocopy = robocopy $folder NULL /L /S /NJH /NJS /BYTES /NC /NDL /NFL 2>$null
+            $bytes = ($robocopy | Select-String "Bytes :").ToString().Split(":")[1].Trim()
+
+            if (-not $bytes) { $bytes = 0 }
 
             [PSCustomObject]@{
-                UserFolder = $_.FullName
+                UserFolder = $folder
                 LastWrite  = $_.LastWriteTime
-                SizeGB     = "{0:N2}" -f ($size / 1GB)
+                SizeGB     = "{0:N2}" -f ([int64]$bytes / 1GB)
             }
         } |
         Sort-Object LastWrite |
