@@ -1,42 +1,21 @@
 ---
-- name: Find users who have not logged in since 2024 with individual size
+- name: Find users who have not logged in since 2024 (fast method)
   hosts: windows
   gather_facts: no
 
   tasks:
 
-    - name: Get old user folders with individual size
+    - name: Get old user folders
       win_shell: |
         $limitDate = Get-Date "2024-01-01"
 
-        $exclude = @('Public','Default','Default User','All Users','Administrator')
-
         Get-ChildItem C:\Users -Directory |
         Where-Object {
-            $_.Name -notin $exclude -and
+            $_.Name -notin @('Public','Default','Default User','All Users','Administrator') -and
             $_.LastWriteTime -lt $limitDate
         } |
-        ForEach-Object {
-
-            $folder = $_.FullName
-
-            # считаем размер конкретной папки
-            $result = robocopy $folder NULL /L /S /BYTES /NJH /NJS /NFL /NDL 2>$null
-
-            $bytes = 0
-            foreach ($line in $result) {
-                if ($line -match "Bytes :\s+(\d+)") {
-                    $bytes = [int64]$matches[1]
-                }
-            }
-
-            [PSCustomObject]@{
-                UserFolder = $folder
-                LastWrite  = $_.LastWriteTime
-                SizeGB     = "{0:N2}" -f ($bytes / 1GB)
-            }
-        } |
-        Sort-Object SizeGB -Descending |
+        Select-Object FullName, LastWriteTime |
+        Sort-Object LastWriteTime |
         Format-Table -AutoSize
 
       register: old_users
