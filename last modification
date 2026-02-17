@@ -1,5 +1,5 @@
 ---
-- name: Find users who have not logged in since 2026
+- name: Find users who have not logged in since 2026 (clean output)
   hosts: windows
   gather_facts: no
 
@@ -16,11 +16,10 @@
             $_.LastLogon -lt $limitDate
         } |
         Select-Object Name, LastLogon |
-        Sort-Object LastLogon |
-        Format-Table -AutoSize
+        ConvertTo-Json
 
       register: old_users
 
     - name: Show result
       debug:
-        var: old_users.stdout_lines
+        var: old_users.stdout
