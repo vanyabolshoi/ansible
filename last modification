@@ -1,5 +1,5 @@
 ---
-- name: Find all users who have not logged in since 2026
+- name: Find users who have not logged in since 2026
   hosts: windows
   gather_facts: no
 
@@ -15,11 +15,15 @@
             $_.Name -notin @('Administrator','DefaultAccount','Guest') -and
             $_.LastLogon -lt $limitDate
         } |
-        Select-Object Name, @{Name='LastLogon';Expression={$_.LastLogon.ToString("yyyy-MM-dd HH:mm:ss")}} |
+        Select-Object Name |
         ConvertTo-Json
 
       register: old_users
 
-    - name: Show result
+    - name: Show result if there are old users
       debug:
-        msg: "{{ old_users.stdout | from_json }}"
+        msg: >-
+          {{
+            [{ 'host': inventory_hostname, 'users': old_users.stdout | default('[]') | from_json }] 
+            if old_users.stdout | default('') != '' else []
+          }}
