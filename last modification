@@ -1,21 +1,22 @@
 ---
-- name: Find users who have not logged in since 2024 (fast method)
+- name: Find users who have not logged in since 2026
   hosts: windows
   gather_facts: no
 
   tasks:
 
-    - name: Get old user folders
+    - name: Get users with last logon before 2026
       win_shell: |
-        $limitDate = Get-Date "2024-01-01"
+        $limitDate = Get-Date "2026-01-01"
 
-        Get-ChildItem C:\Users -Directory |
+        Get-LocalUser |
         Where-Object {
-            $_.Name -notin @('Public','Default','Default User','All Users','Administrator') -and
-            $_.LastWriteTime -lt $limitDate
+            $_.Enabled -eq $true -and
+            $_.Name -notin @('Administrator','DefaultAccount','Guest') -and
+            $_.LastLogon -lt $limitDate
         } |
-        Select-Object FullName, LastWriteTime |
-        Sort-Object LastWriteTime |
+        Select-Object Name, LastLogon |
+        Sort-Object LastLogon |
         Format-Table -AutoSize
 
       register: old_users
