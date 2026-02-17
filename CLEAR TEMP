@@ -1,53 +1,74 @@
 ---
-- name: Clear TEMP folders for all users on Windows (skip locked files)
-  hosts: all
+- name: Find old users and show system update cache size
+  hosts: windows
   gather_facts: no
+
   tasks:
 
-    - name: Create BAT file to clear TEMP folders
-      win_copy:
-        dest: C:\Windows\Temp\clear_all_users_temp.bat
-        content: |
-          @echo off
-          setlocal EnableDelayedExpansion
+    - name: Get old user folders with individual size
+      win_shell: |
+        $limitDate = Get-Date "2024-01-01"
+        $exclude = @('Public','Default','Default User','All Users','Administrator')
 
-          echo ================================
-          echo Clearing TEMP folders for all users
-          echo ================================
+        Get-ChildItem C:\Users -Directory |
+        Where-Object {
+            $_.Name -notin $exclude -and
+            $_.LastWriteTime -lt $limitDate
+        } |
+        ForEach-Object {
 
-          :: Process all user profiles
-          for /d %%U in (C:\Users\*) do (
-              set "USERPATH=%%U"
-              echo -------------------------------
-              echo Clearing profile: %%U
+            $folder = $_.FullName
+            $result = robocopy $folder NULL /L /S /BYTES /NJH /NJS /NFL /NDL 2>$null
 
-              call :CleanFolder "%%U\AppData\Local\Temp"
-              call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\INetCache"
-              call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\Temporary Internet Files"
-          )
+            $bytes = 0
+            foreach ($line in $result) {
+                if ($line -match "Bytes :\s+(\d+)") {
+                    $bytes = [int64]$matches[1]
+                }
+            }
 
-          echo Clearing system TEMP...
-          call :CleanFolder "C:\Windows\Temp"
+            [PSCustomObject]@{
+                Type       = "UserProfile"
+                Name       = $_.Name
+                Path       = $folder
+                LastWrite  = $_.LastWriteTime
+                SizeGB     = "{0:N2}" -f ($bytes / 1GB)
+            }
+        }
 
-          echo Done
-          exit /b 0
+      register: old_users
 
-          :CleanFolder
-          set "FOLDER=%~1"
+    - name: Get SoftwareDistribution Download size
+      win_shell: |
+        $folder = "C:\Windows\SoftwareDistribution\Download"
 
-          if exist "%FOLDER%" (
-              echo Clearing %FOLDER%
-              attrib -r -s -h "%FOLDER%\*" /s /d >nul 2>&1
-              del /f /s /q "%FOLDER%\*" >nul 2>&1 || exit /b 0
-              for /d %%D in ("%FOLDER%\*") do rd /s /q "%%D" >nul 2>&1 || exit /b 0
-          )
-          exit /b 0
+        if (Test-Path $folder) {
 
-    - name: Run BAT file
-      win_shell: C:\Windows\Temp\clear_all_users_temp.bat
-      ignore_errors: yes
+            $result = robocopy $folder NULL /L /S /BYTES /NJH /NJS /NFL /NDL 2>$null
 
-    - name: Remove temporary BAT file
-      win_file:
-        path: C:\Windows\Temp\clear_all_users_temp.bat
-        state: absent
+            $bytes = 0
+            foreach ($line in $result) {
+                if ($line -match "Bytes :\s+(\d+)") {
+                    $bytes = [int64]$matches[1]
+                }
+            }
+
+            [PSCustomObject]@{
+                Type      = "WindowsUpdateCache"
+                Name      = "SoftwareDistribution"
+                Path      = $folder
+                LastWrite = (Get-Item $folder).LastWriteTime
+                SizeGB    = "{0:N2}" -f ($bytes / 1GB)
+            }
+        }
+
+      register: wu_cache
+
+    - name: Show results
+      debug:
+        msg: |
+          ==== OLD USER PROFILES ====
+          {{ old_users.stdout }}
+
+          ==== WINDOWS UPDATE CACHE ====
+          {{ wu_cache.stdout }}
