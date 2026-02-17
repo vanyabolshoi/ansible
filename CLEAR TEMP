@@ -32,11 +32,10 @@
 
           echo.
           echo Done.
-          exit
+          exit /b 0
 
           :CleanFolder
           set FOLDER=%~1
-
           if exist "%FOLDER%" (
               echo Cleaning %FOLDER%
               :: Remove read-only, system, hidden attributes
@@ -48,11 +47,11 @@
               :: Delete subfolders recursively, ignore errors
               for /d %%D in ("%FOLDER%\*") do rd /s /q "%%D" >nul 2>&1
           )
-
-          exit /b
+          exit /b 0
 
     - name: Run the BAT file
       win_shell: C:\Windows\Temp\clear_all_users_temp.bat
+      ignore_errors: yes
 
     - name: Delete temporary BAT file
       win_file:
