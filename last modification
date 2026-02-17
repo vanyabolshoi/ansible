@@ -9,13 +9,17 @@
       win_shell: |
         $limitDate = Get-Date "2026-01-01"
 
-        # Получаем всех локальных пользователей
-        $users = Get-LocalUser |
-                 Where-Object {
-                     $_.Enabled -eq $true -and
-                     $_.Name -notin @('Administrator','DefaultAccount','Guest') -and
-                     $_.LastLogon -lt $limitDate
-                 }
+        Get-LocalUser |
+        Where-Object {
+            $_.Enabled -eq $true -and
+            $_.Name -notin @('Administrator','DefaultAccount','Guest') -and
+            $_.LastLogon -lt $limitDate
+        } |
+        Select-Object Name, @{Name='LastLogon';Expression={$_.LastLogon.ToString("yyyy-MM-dd HH:mm:ss")}} |
+        ConvertTo-Json
 
-        # Преобразуем в читаемый формат
-        $users | Select-Object Name, @{Name='LastLogon';Express
+      register: old_users
+
+    - name: Show result
+      debug:
+        msg: "{{ old_users.stdout | from_json }}"
