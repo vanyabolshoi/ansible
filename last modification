@@ -14,32 +14,31 @@
               $_.Name -notin @('Administrator','DefaultAccount','Guest') -and
               $_.LastLogon -lt $limitDate
           } |
-          Select-Object Name, @{Name='LastLogon';Expression={$_.LastLogon}} 
-        ) | ConvertTo-Json
+          Select-Object Name
+        ) | ForEach-Object { $_.Name } | ConvertTo-Json
       register: old_users
 
     - name: Set fact for old users if any
       set_fact:
-        old_users_host: "{{ old_users.stdout | default('[]') | from_json }}"
+        old_users_host: "{{ old_users.stdout | from_json }}"
       when: old_users.stdout | default('') != ''
 
-- name: Combine all old users on localhost
+- name: Show all old users from all hosts
   hosts: localhost
   gather_facts: no
   tasks:
 
-    - name: Gather all old users from all hosts
+    - name: Combine old users from all hosts
       set_fact:
         old_users_all: >-
           {{
             groups['windows']
             | map('extract', hostvars, 'old_users_host')
-            | select('defined')
             | zip(groups['windows'])
             | map('reverse')
             | map('list')
-            | map('community.general.dict_kv', 'host', 'users')
-            | selectattr('users', 'truthy')
+            | selectattr(0, 'defined')
+            | map('community.general.json_query', '[1] & {"host": @[1], "users": @[0]}')
             | list
           }}
 
