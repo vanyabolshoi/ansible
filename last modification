@@ -1,7 +1,9 @@
 ---
-- name: Find users who have not logged in since 2026
+- name: Find all users who have not logged in since 2026
   hosts: windows
   gather_facts: no
+  vars:
+    old_users_all: []
 
   tasks:
 
@@ -21,10 +23,15 @@
 
       register: old_users
 
-    - name: Show result if there are old users
+    - name: Add old users from this host to the global list
+      set_fact:
+        old_users_all: "{{ old_users_all + [{'host': inventory_hostname, 'users': old_users.stdout | default('[]') | from_json}] }}"
+      when: old_users.stdout | default('') != ''
+
+- name: Show all old users from all hosts
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Display combined list
       debug:
-        msg: >-
-          {{
-            [{ 'host': inventory_hostname, 'users': old_users.stdout | default('[]') | from_json }] 
-            if old_users.stdout | default('') != '' else []
-          }}
+        var: old_users_all
