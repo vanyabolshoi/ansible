@@ -1,67 +1,60 @@
 ---
-- name: Очистка TEMP всех пользователей на Windows (без закрытия приложений)
+- name: Clear TEMP folders for all users on Windows (without closing apps)
   hosts: all
   gather_facts: no
   tasks:
 
-    - name: Создать BAT файл для очистки TEMP всех пользователей
+    - name: Create BAT file to clear TEMP folders
       win_copy:
         dest: C:\Windows\Temp\clear_all_users_temp.bat
         content: |
           @echo off
           setlocal EnableDelayedExpansion
 
-          echo ================================
-          echo  Очистка TEMP всех пользователей
-          echo ================================
-
+          echo =================================
+          echo Clearing TEMP folders for all users
+          echo =================================
           echo.
-          echo Обработка профилей пользователей...
 
+          echo Processing user profiles...
           for /d %%U in (C:\Users\*) do (
               echo -------------------------------
-              echo Очистка профиля: %%U
+              echo Cleaning profile: %%U
 
-              call :CleanFolder "%%U\AppData\Local\Temp"
-              call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\INetCache"
-              call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\Temporary Internet Files"
+              if exist "%%U\AppData\Local\Temp" call :CleanFolder "%%U\AppData\Local\Temp"
+              if exist "%%U\AppData\Local\Microsoft\Windows\INetCache" call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\INetCache"
+              if exist "%%U\AppData\Local\Microsoft\Windows\Temporary Internet Files" call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\Temporary Internet Files"
           )
 
           echo.
-          echo Очистка системного TEMP...
-          call :CleanFolder "C:\Windows\Temp"
+          echo Cleaning system TEMP...
+          if exist "C:\Windows\Temp" call :CleanFolder "C:\Windows\Temp"
 
           echo.
-          echo Готово.
-          exit /b 0
+          echo Done.
+          exit
 
           :CleanFolder
           set FOLDER=%~1
 
           if exist "%FOLDER%" (
-              echo Очистка %FOLDER%
-
-              :: Снимаем атрибуты
+              echo Cleaning %FOLDER%
+              :: Remove read-only, system, hidden attributes
               attrib -r -s -h "%FOLDER%\*" /s /d >nul 2>&1
 
-              :: Удаляем файлы, пропуская занятые
-              for %%F in ("%FOLDER%\*") do (
-                  del /f /q "%%F" >nul 2>&1
-              )
+              :: Delete files recursively, ignore errors
+              del /f /s /q "%FOLDER%\*.*" >nul 2>&1
 
-              :: Удаляем подпапки, пропуская занятые
-              for /d %%D in ("%FOLDER%\*") do (
-                  rd /s /q "%%D" >nul 2>&1
-              )
+              :: Delete subfolders recursively, ignore errors
+              for /d %%D in ("%FOLDER%\*") do rd /s /q "%%D" >nul 2>&1
           )
 
-          exit /b 0
+          exit /b
 
-    - name: Запустить BAT файл
+    - name: Run the BAT file
       win_shell: C:\Windows\Temp\clear_all_users_temp.bat
-      ignore_errors: yes
 
-    - name: Удалить временный BAT файл
+    - name: Delete temporary BAT file
       win_file:
         path: C:\Windows\Temp\clear_all_users_temp.bat
         state: absent
