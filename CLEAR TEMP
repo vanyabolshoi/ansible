@@ -1,67 +1,67 @@
 ---
-- name: Clear TEMP folders for all users on Windows (with size logging in stdout)
+- name: Очистка TEMP всех пользователей на Windows (без закрытия приложений)
   hosts: all
   gather_facts: no
   tasks:
 
-    - name: Create BAT file to clear TEMP folders with logging
+    - name: Создать BAT файл для очистки TEMP всех пользователей
       win_copy:
         dest: C:\Windows\Temp\clear_all_users_temp.bat
         content: |
           @echo off
           setlocal EnableDelayedExpansion
 
-          set TOTALFILES=0
-          set TOTALSIZE=0
+          echo ================================
+          echo  Очистка TEMP всех пользователей
+          echo ================================
 
-          echo Processing user profiles...
+          echo.
+          echo Обработка профилей пользователей...
+
           for /d %%U in (C:\Users\*) do (
               echo -------------------------------
-              echo Cleaning profile: %%U
-              
-              if exist "%%U\AppData\Local\Temp" call :CleanFolder "%%U\AppData\Local\Temp"
-              if exist "%%U\AppData\Local\Microsoft\Windows\INetCache" call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\INetCache"
-              if exist "%%U\AppData\Local\Microsoft\Windows\Temporary Internet Files" call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\Temporary Internet Files"
+              echo Очистка профиля: %%U
+
+              call :CleanFolder "%%U\AppData\Local\Temp"
+              call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\INetCache"
+              call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\Temporary Internet Files"
           )
 
           echo.
-          echo Cleaning system TEMP...
-          if exist "C:\Windows\Temp" call :CleanFolder "C:\Windows\Temp"
+          echo Очистка системного TEMP...
+          call :CleanFolder "C:\Windows\Temp"
 
-          :: Convert total size to MB
-          set /a TOTALSIZE_MB=!TOTALSIZE!/1048576
-
-          :: Output results to stdout (Ansible will capture)
-          echo ===============================
-          echo TOTAL FILES DELETED: !TOTALFILES!
-          echo TOTAL SIZE DELETED: !TOTALSIZE_MB! MB
-          echo ===============================
-
+          echo.
+          echo Готово.
           exit /b 0
 
           :CleanFolder
           set FOLDER=%~1
+
           if exist "%FOLDER%" (
+              echo Очистка %FOLDER%
+
+              :: Снимаем атрибуты
               attrib -r -s -h "%FOLDER%\*" /s /d >nul 2>&1
-              for /r "%FOLDER%" %%F in (*) do (
-                  set /a TOTALFILES+=1
-                  for %%S in (%%F) do set /a TOTALSIZE+=%%~zS
+
+              :: Удаляем файлы, пропуская занятые
+              for %%F in ("%FOLDER%\*") do (
                   del /f /q "%%F" >nul 2>&1
               )
-              for /d %%D in ("%FOLDER%\*") do rd /s /q "%%D" >nul 2>&1
+
+              :: Удаляем подпапки, пропуская занятые
+              for /d %%D in ("%FOLDER%\*") do (
+                  rd /s /q "%%D" >nul 2>&1
+              )
           )
+
           exit /b 0
 
-    - name: Run the BAT file
+    - name: Запустить BAT файл
       win_shell: C:\Windows\Temp\clear_all_users_temp.bat
-      register: temp_cleanup_output
       ignore_errors: yes
 
-    - name: Show TEMP cleanup results
-      debug:
-        msg: "{{ temp_cleanup_output.stdout_lines }}"
-
-    - name: Delete temporary BAT file
+    - name: Удалить временный BAT файл
       win_file:
         path: C:\Windows\Temp\clear_all_users_temp.bat
         state: absent
