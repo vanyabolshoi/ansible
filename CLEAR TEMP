@@ -1,5 +1,5 @@
 ---
-- name: Clear TEMP folders for all users on Windows (with size logging)
+- name: Clear TEMP folders for all users on Windows (with size logging in stdout)
   hosts: all
   gather_facts: no
   tasks:
@@ -10,12 +10,6 @@
         content: |
           @echo off
           setlocal EnableDelayedExpansion
-
-          set LOGFILE=C:\Windows\Temp\temp_cleanup.log
-          echo ================================= > %LOGFILE%
-          echo TEMP cleanup started at %DATE% %TIME% >> %LOGFILE%
-          echo ================================= >> %LOGFILE%
-          echo. >> %LOGFILE%
 
           set TOTALFILES=0
           set TOTALSIZE=0
@@ -34,37 +28,26 @@
           echo Cleaning system TEMP...
           if exist "C:\Windows\Temp" call :CleanFolder "C:\Windows\Temp"
 
-          echo. >> %LOGFILE%
-          echo TOTAL FILES DELETED: !TOTALFILES! >> %LOGFILE%
+          :: Convert total size to MB
           set /a TOTALSIZE_MB=!TOTALSIZE!/1048576
-          echo TOTAL SIZE DELETED: !TOTALSIZE_MB! MB >> %LOGFILE%
 
-          :: Also output to stdout for Ansible
-          echo.
-          echo === TEMP CLEANUP RESULT ===
+          :: Output results to stdout (Ansible will capture)
+          echo ===============================
           echo TOTAL FILES DELETED: !TOTALFILES!
           echo TOTAL SIZE DELETED: !TOTALSIZE_MB! MB
-          echo ===========================
-
-          echo TEMP cleanup finished at %DATE% %TIME% >> %LOGFILE%
-          echo ================================= >> %LOGFILE%
+          echo ===============================
 
           exit /b 0
 
           :CleanFolder
           set FOLDER=%~1
           if exist "%FOLDER%" (
-              echo Cleaning %FOLDER%
               attrib -r -s -h "%FOLDER%\*" /s /d >nul 2>&1
-
-              :: Loop over files recursively to sum size and count
               for /r "%FOLDER%" %%F in (*) do (
                   set /a TOTALFILES+=1
                   for %%S in (%%F) do set /a TOTALSIZE+=%%~zS
                   del /f /q "%%F" >nul 2>&1
               )
-
-              :: Delete subfolders recursively
               for /d %%D in ("%FOLDER%\*") do rd /s /q "%%D" >nul 2>&1
           )
           exit /b 0
