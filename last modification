@@ -1,5 +1,5 @@
 ---
-- name: Find users who have not logged in since 2026 (clean output)
+- name: Find all users who have not logged in since 2026
   hosts: windows
   gather_facts: no
 
@@ -9,17 +9,13 @@
       win_shell: |
         $limitDate = Get-Date "2026-01-01"
 
-        Get-LocalUser |
-        Where-Object {
-            $_.Enabled -eq $true -and
-            $_.Name -notin @('Administrator','DefaultAccount','Guest') -and
-            $_.LastLogon -lt $limitDate
-        } |
-        Select-Object Name, LastLogon |
-        ConvertTo-Json
+        # Получаем всех локальных пользователей
+        $users = Get-LocalUser |
+                 Where-Object {
+                     $_.Enabled -eq $true -and
+                     $_.Name -notin @('Administrator','DefaultAccount','Guest') -and
+                     $_.LastLogon -lt $limitDate
+                 }
 
-      register: old_users
-
-    - name: Show result
-      debug:
-        var: old_users.stdout
+        # Преобразуем в читаемый формат
+        $users | Select-Object Name, @{Name='LastLogon';Express
