@@ -1,5 +1,4 @@
----
-- name: Find all users who have not logged in since 2026
+- name: Find users who have not logged in since 2026
   hosts: windows
   gather_facts: no
   tasks:
@@ -15,11 +14,11 @@
               $_.Name -notin @('Administrator','DefaultAccount','Guest') -and
               $_.LastLogon -lt $limitDate
           } |
-          Select-Object -ExpandProperty Name
+          Select-Object Name, @{Name='LastLogon';Expression={$_.LastLogon}} 
         ) | ConvertTo-Json
       register: old_users
 
-    - name: Add old users to a host fact
+    - name: Set fact for old users if any
       set_fact:
         old_users_host: "{{ old_users.stdout | default('[]') | from_json }}"
       when: old_users.stdout | default('') != ''
@@ -28,18 +27,20 @@
   hosts: localhost
   gather_facts: no
   tasks:
-    - name: Gather old users from all hosts
+
+    - name: Gather all old users from all hosts
       set_fact:
         old_users_all: >-
           {{
-            groups['windows'] |
-            map('extract', hostvars, 'old_users_host') |
-            select('defined') |
-            zip(groups['windows']) |
-            map('reverse') |
-            map('list') |
-            map('combine', [{'host': item[1], 'users': item[0]}]) |
-            list
+            groups['windows']
+            | map('extract', hostvars, 'old_users_host')
+            | select('defined')
+            | zip(groups['windows'])
+            | map('reverse')
+            | map('list')
+            | map('community.general.dict_kv', 'host', 'users')
+            | selectattr('users', 'truthy')
+            | list
           }}
 
     - name: Display combined list
