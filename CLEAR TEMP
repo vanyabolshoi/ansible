@@ -1,74 +1,67 @@
 ---
-- name: Find old users and show system update cache size
-  hosts: windows
+- name: Очистка TEMP всех пользователей на Windows (без закрытия приложений)
+  hosts: all
   gather_facts: no
-
   tasks:
 
-    - name: Get old user folders with individual size
-      win_shell: |
-        $limitDate = Get-Date "2024-01-01"
-        $exclude = @('Public','Default','Default User','All Users','Administrator')
+    - name: Создать BAT файл для очистки TEMP всех пользователей
+      win_copy:
+        dest: C:\Windows\Temp\clear_all_users_temp.bat
+        content: |
+          @echo off
+          setlocal EnableDelayedExpansion
 
-        Get-ChildItem C:\Users -Directory |
-        Where-Object {
-            $_.Name -notin $exclude -and
-            $_.LastWriteTime -lt $limitDate
-        } |
-        ForEach-Object {
+          echo ================================
+          echo  Очистка TEMP всех пользователей
+          echo ================================
 
-            $folder = $_.FullName
-            $result = robocopy $folder NULL /L /S /BYTES /NJH /NJS /NFL /NDL 2>$null
+          echo.
+          echo Обработка профилей пользователей...
 
-            $bytes = 0
-            foreach ($line in $result) {
-                if ($line -match "Bytes :\s+(\d+)") {
-                    $bytes = [int64]$matches[1]
-                }
-            }
+          for /d %%U in (C:\Users\*) do (
+              set USERPATH=%%U
+              echo -------------------------------
+              echo Очистка профиля: %%U
 
-            [PSCustomObject]@{
-                Type       = "UserProfile"
-                Name       = $_.Name
-                Path       = $folder
-                LastWrite  = $_.LastWriteTime
-                SizeGB     = "{0:N2}" -f ($bytes / 1GB)
-            }
-        }
+              call :CleanFolder "%%U\AppData\Local\Temp"
+              call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\INetCache"
+              call :CleanFolder "%%U\AppData\Local\Microsoft\Windows\Temporary Internet Files"
+          )
 
-      register: old_users
+          echo.
+          echo Очистка системного TEMP...
+          call :CleanFolder "C:\Windows\Temp"
 
-    - name: Get SoftwareDistribution Download size
-      win_shell: |
-        $folder = "C:\Windows\SoftwareDistribution\Download"
+          echo.
+          echo Готово.
+          exit
 
-        if (Test-Path $folder) {
+          :CleanFolder
+          set FOLDER=%~1
 
-            $result = robocopy $folder NULL /L /S /BYTES /NJH /NJS /NFL /NDL 2>$null
+          if exist "%FOLDER%" (
+              echo Очистка %FOLDER%
 
-            $bytes = 0
-            foreach ($line in $result) {
-                if ($line -match "Bytes :\s+(\d+)") {
-                    $bytes = [int64]$matches[1]
-                }
-            }
+              :: Снимаем атрибуты
+              attrib -r -s -h "%FOLDER%\*" /s /d >nul 2>&1
 
-            [PSCustomObject]@{
-                Type      = "WindowsUpdateCache"
-                Name      = "SoftwareDistribution"
-                Path      = $folder
-                LastWrite = (Get-Item $folder).LastWriteTime
-                SizeGB    = "{0:N2}" -f ($bytes / 1GB)
-            }
-        }
+              :: Удаляем файлы, пропуская занятые
+              for %%F in ("%FOLDER%\*") do (
+                  del /f /q "%%F" >nul 2>&1
+              )
 
-      register: wu_cache
+              :: Удаляем подпапки, пропуская занятые
+              for /d %%D in ("%FOLDER%\*") do (
+                  rd /s /q "%%D" >nul 2>&1
+              )
+          )
 
-    - name: Show results
-      debug:
-        msg: |
-          ==== OLD USER PROFILES ====
-          {{ old_users.stdout }}
+          exit /b
 
-          ==== WINDOWS UPDATE CACHE ====
-          {{ wu_cache.stdout }}
+    - name: Запустить BAT файл
+      win_shell: C:\Windows\Temp\clear_all_users_temp.bat
+
+    - name: Удалить временный BAT файл
+      win_file:
+        path: C:\Windows\Temp\clear_all_users_temp.bat
+        state: absent
