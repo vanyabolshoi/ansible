@@ -15,7 +15,7 @@
             $_.Name -notin @('Administrator','DefaultAccount','Guest') -and
             $_.LastLogon -lt $limitDate
         } |
-        Select-Object Name |
+        Select-Object -ExpandProperty Name |
         ConvertTo-Json
 
       register: old_users
