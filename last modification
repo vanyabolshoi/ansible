@@ -38,8 +38,8 @@
             | map('reverse')
             | map('list')
             | selectattr(0, 'defined')
-            | map('community.general.json_query', '[1] & {"host": @[1], "users": @[0]}')
-            | list
+            | map('community.general.dict_kv', 'users')
+            | map('combine', [{'host': item[1]}]) | list
           }}
 
     - name: Display combined list
