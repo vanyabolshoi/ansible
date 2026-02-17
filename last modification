@@ -2,9 +2,6 @@
 - name: Find all users who have not logged in since 2026
   hosts: windows
   gather_facts: no
-  vars:
-    old_users_all: []
-
   tasks:
 
     - name: Get users with last logon before 2026
@@ -20,18 +17,31 @@
           } |
           Select-Object -ExpandProperty Name
         ) | ConvertTo-Json
-
       register: old_users
 
-    - name: Add old users from this host to the global list
+    - name: Add old users to a host fact
       set_fact:
-        old_users_all: "{{ old_users_all + [{'host': inventory_hostname, 'users': old_users.stdout | default('[]') | from_json}] }}"
+        old_users_host: "{{ old_users.stdout | default('[]') | from_json }}"
       when: old_users.stdout | default('') != ''
 
-- name: Show all old users from all hosts
+- name: Combine all old users on localhost
   hosts: localhost
   gather_facts: no
   tasks:
+    - name: Gather old users from all hosts
+      set_fact:
+        old_users_all: >-
+          {{
+            groups['windows'] |
+            map('extract', hostvars, 'old_users_host') |
+            select('defined') |
+            zip(groups['windows']) |
+            map('reverse') |
+            map('list') |
+            map('combine', [{'host': item[1], 'users': item[0]}]) |
+            list
+          }}
+
     - name: Display combined list
       debug:
         var: old_users_all
