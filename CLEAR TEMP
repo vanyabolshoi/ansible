@@ -1,5 +1,5 @@
 ---
-- name: Clear TEMP folders for all users on Windows (without closing apps) with size logging
+- name: Clear TEMP folders for all users on Windows (with size logging)
   hosts: all
   gather_facts: no
   tasks:
@@ -36,7 +36,16 @@
 
           echo. >> %LOGFILE%
           echo TOTAL FILES DELETED: !TOTALFILES! >> %LOGFILE%
-          echo TOTAL SIZE DELETED: !TOTALSIZE! bytes >> %LOGFILE%
+          set /a TOTALSIZE_MB=!TOTALSIZE!/1048576
+          echo TOTAL SIZE DELETED: !TOTALSIZE_MB! MB >> %LOGFILE%
+
+          :: Also output to stdout for Ansible
+          echo.
+          echo === TEMP CLEANUP RESULT ===
+          echo TOTAL FILES DELETED: !TOTALFILES!
+          echo TOTAL SIZE DELETED: !TOTALSIZE_MB! MB
+          echo ===========================
+
           echo TEMP cleanup finished at %DATE% %TIME% >> %LOGFILE%
           echo ================================= >> %LOGFILE%
 
@@ -62,7 +71,12 @@
 
     - name: Run the BAT file
       win_shell: C:\Windows\Temp\clear_all_users_temp.bat
+      register: temp_cleanup_output
       ignore_errors: yes
+
+    - name: Show TEMP cleanup results
+      debug:
+        msg: "{{ temp_cleanup_output.stdout_lines }}"
 
     - name: Delete temporary BAT file
       win_file:
