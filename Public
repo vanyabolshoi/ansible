@@ -2,6 +2,14 @@
 - name: Настройка WinRM для Ansible
   hosts: windows
   gather_facts: no
+
+  vars:
+    ansible_user: Administrator
+    ansible_password: "Pharmacia_"
+    ansible_connection: winrm
+    ansible_winrm_transport: basic
+    ansible_winrm_server_cert_validation: ignore
+
   tasks:
 
     - name: Включаем WinRM и настраиваем сеть/порты
@@ -36,4 +44,3 @@
 
         # 8️⃣ Перезапускаем службу WinRM
         Restart-Service WinRM
-      become: yes
