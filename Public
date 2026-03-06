@@ -1,0 +1,39 @@
+---
+- name: Настройка WinRM для Ansible
+  hosts: windows
+  gather_facts: no
+  tasks:
+
+    - name: Включаем WinRM и настраиваем сеть/порты
+      win_shell: |
+        # -------------------------------
+        # Полная настройка WinRM для Ansible
+        # -------------------------------
+
+        # 1️⃣ Меняем все Public сети на Private
+        Get-NetConnectionProfile | Where-Object {$_.NetworkCategory -eq "Public"} | Set-NetConnectionProfile -NetworkCategory Private
+
+        # 2️⃣ Включаем WinRM и открываем firewall для HTTP
+        Enable-PSRemoting -Force
+
+        # 3️⃣ Настройка Basic Auth и AllowUnencrypted
+        Set-Item WSMan:\localhost\Service\Auth\Basic -Value $true
+        Set-Item WSMan:\localhost\Service\AllowUnencrypted -Value $true
+
+        # 4️⃣ Разрешаем любые хосты (для Ansible / ZeroTier)
+        Set-Item WSMan:\localhost\Client\TrustedHosts -Value "*" -Force
+
+        # 5️⃣ Создаём самоподписанный сертификат для HTTPS
+        $cert = New-SelfSignedCertificate -DnsName $env:COMPUTERNAME -CertStoreLocation Cert:\LocalMachine\My
+        $thumbprint = $cert.Thumbprint
+
+        # 6️⃣ Добавляем HTTPS-лисенер на 5986
+        New-Item -Path WSMan:\Localhost\Listener -Transport HTTPS -Address * -CertificateThumbprint $thumbprint -Force
+
+        # 7️⃣ Открываем порты 5985 и 5986 в firewall
+        New-NetFirewallRule -DisplayName "WinRM HTTP"  -Direction Inbound -LocalPort 5985 -Protocol TCP -Action Allow
+        New-NetFirewallRule -DisplayName "WinRM HTTPS" -Direction Inbound -LocalPort 5986 -Protocol TCP -Action Allow
+
+        # 8️⃣ Перезапускаем службу WinRM
+        Restart-Service WinRM
+      become: yes
