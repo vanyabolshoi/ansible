@@ -1,29 +1,8 @@
----
-- name: Enable Remote Desktop
-  hosts: windows
-  gather_facts: false
-  ignore_unreachable: yes
-
-  tasks:
-    - name: Enable RDP in registry
-      ansible.windows.win_regedit:
-        path: HKLM:\System\CurrentControlSet\Control\Terminal Server
-        name: fDenyTSConnections
-        data: 0
-        type: dword
-
-    - name: Allow RDP port 3389
-      ansible.windows.win_firewall_rule:
-        name: "Allow RDP 3389"
-        localport: 3389
-        action: allow
-        direction: in
-        protocol: tcp
-        state: present
-        enabled: yes
-
-    - name: Ensure RDP service is running
-      ansible.windows.win_service:
-        name: TermService
-        start_mode: auto
-        state: started
+    - name: Allow RDP port 3389 firewall
+      ansible.windows.win_shell: |
+        netsh advfirewall firewall show rule name="Allow RDP 3389" >nul 2>&1
+        if %errorlevel% neq 0 netsh advfirewall firewall add rule name="Allow RDP 3389" dir=in action=allow protocol=TCP localport=3389
+      args:
+        executable: cmd
+      register: rdp_firewall
+      failed_when: false
