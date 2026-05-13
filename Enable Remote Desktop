@@ -1,0 +1,28 @@
+---
+- name: Enable Remote Desktop
+  hosts: windows
+  gather_facts: false
+  ignore_unreachable: yes
+
+  tasks:
+    - name: Enable RDP in registry
+      ansible.windows.win_regedit:
+        path: HKLM:\System\CurrentControlSet\Control\Terminal Server
+        name: fDenyTSConnections
+        data: 0
+        type: dword
+
+    - name: Allow RDP through Windows Firewall
+      ansible.windows.win_shell: |
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
+        Enable-NetFirewallRule -DisplayGroup "Удаленный рабочий стол" -ErrorAction SilentlyContinue
+
+    - name: Set RDP service startup automatic
+      ansible.windows.win_service:
+        name: TermService
+        start_mode: auto
+
+    - name: Start RDP service
+      ansible.windows.win_service:
+        name: TermService
+        state: started
