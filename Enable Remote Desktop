@@ -12,17 +12,18 @@
         data: 0
         type: dword
 
-    - name: Allow RDP through Windows Firewall
-      ansible.windows.win_shell: |
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
-        Enable-NetFirewallRule -DisplayGroup "Удаленный рабочий стол" -ErrorAction SilentlyContinue
+    - name: Allow RDP port 3389
+      ansible.windows.win_firewall_rule:
+        name: "Allow RDP 3389"
+        localport: 3389
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
 
-    - name: Set RDP service startup automatic
+    - name: Ensure RDP service is running
       ansible.windows.win_service:
         name: TermService
         start_mode: auto
-
-    - name: Start RDP service
-      ansible.windows.win_service:
-        name: TermService
         state: started
