@@ -1,23 +1,35 @@
 ---
-- name: Backup SQL files
+- name: Auto SQL Backup
   hosts: all
   gather_facts: no
 
   vars:
     src_path: "C:\\DataSQL"
-    db_name: "AC407"
-    dst_path: "\\\\172.16.11.47\\BackupSQL\\{{ db_name }}"
+    backup_share: "\\\\172.16.11.47\\BackupSQL"
+    backup_user: "172.16.11.47\\vanyabolshoi"
+    backup_pass: "Until1987"
 
   tasks:
-    - name: Connect share
-      win_shell: |
-        net use \\172.16.11.47\BackupSQL /user:172.16.11.47\vanyabolshoi Until1987
 
-    - name: Create backup folder
+    - name: Connect network share
       win_shell: |
-        New-Item -ItemType Directory -Force -Path "{{ dst_path }}"
+        net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
 
-    - name: Copy SQL files
+    - name: Detect database name automatically
       win_shell: |
-        robocopy "{{ src_path }}" "{{ dst_path }}" "{{ db_name }}*" /Z /R:3 /W:5
+        Get-ChildItem {{ src_path }} | Where-Object { $_.Name -notlike "*_log*" } | Select-Object -First 1 -ExpandProperty BaseName
+      register: db_detect
+
+    - name: Create folder automatically
+      win_shell: |
+        cmd /c "if not exist {{ backup_share }}\{{ db_detect.stdout }} mkdir {{ backup_share }}\{{ db_detect.stdout }}"
+
+    - name: Copy database files
+      win_shell: |
+        robocopy "{{ src_path }}" "{{ backup_share }}\{{ db_detect.stdout }}" "{{ db_detect.stdout }}*" /Z /R:3 /W:5
         if ($LASTEXITCODE -le 7) { exit 0 } else { exit $LASTEXITCODE }
+
+    - name: Disconnect share
+      win_shell: |
+        net use {{ backup_share }} /delete /y
+      ignore_errors: yes
