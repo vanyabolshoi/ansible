@@ -1,13 +1,12 @@
 ---
 - name: Backup SQL files
-  hosts: sql_source
+  hosts: all
   gather_facts: no
 
   vars:
     src_path: "C:\\DataSQL"
     db_name: "AC407"
-    dst_root: "\\\\172.16.11.47\\BackupSQL"
-    dst_path: "{{ dst_root }}\\{{ db_name }}\\{{ lookup('pipe','date +%Y-%m-%d_%H-%M') }}"
+    dst_path: "\\\\172.16.11.47\\BackupSQL\\{{ db_name }}"
 
   tasks:
     - name: Create backup folder
