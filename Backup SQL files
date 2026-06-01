@@ -1,38 +1,51 @@
 ---
-- name: Auto SQL Backup
+- name: SQL Server Backup
   hosts: all
   gather_facts: no
 
   vars:
-    src_path: "C:\\DataSQL"
     backup_share: "\\\\172.16.11.47\\BackupSQL"
     backup_user: "172.16.11.47\\vanyabolshoi"
     backup_pass: "Until1987"
+    sql_instance: ".\\SQLEXPRESS"
 
   tasks:
-    - name: Detect database and backup files
+    - name: Run SQL backup and copy
       win_shell: |
         net use {{ backup_share }} /delete /y 2>$null
         net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
 
-        $db = Get-ChildItem "{{ src_path }}" |
+        $db = Get-ChildItem "C:\DataSQL" |
           Where-Object { $_.Name -notlike "*_log*" } |
           Select-Object -First 1 -ExpandProperty BaseName
 
-        $dst = "{{ backup_share }}\$db"
+        $localBak = "C:\Temp\$db.bak"
+        $remoteDir = "{{ backup_share }}\$db"
 
-        if (!(Test-Path -LiteralPath $dst)) {
-          New-Item -ItemType Directory -Path $dst -Force
+        if (!(Test-Path "C:\Temp")) {
+          New-Item -ItemType Directory -Path "C:\Temp" -Force
         }
 
-        robocopy "{{ src_path }}" "$dst" "$db*" /Z /R:3 /W:5
+        if (!(Test-Path $remoteDir)) {
+          New-Item -ItemType Directory -Path $remoteDir -Force
+        }
 
-        $code = $LASTEXITCODE
+        sqlcmd -S {{ sql_instance }} -Q "
+        BACKUP DATABASE [$db]
+        TO DISK = '$localBak'
+        WITH FORMAT, INIT,
+        NAME = 'Full Backup of $db',
+        SKIP, NOREWIND, NOUNLOAD, STATS = 10
+        "
+
+        robocopy C:\Temp $remoteDir "$db.bak" /Z /R:3 /W:5
+
+        Remove-Item $localBak -Force
 
         net use {{ backup_share }} /delete /y
 
-        if ($code -le 7) {
+        if ($LASTEXITCODE -le 7) {
           exit 0
         } else {
-          exit $code
+          exit $LASTEXITCODE
         }
