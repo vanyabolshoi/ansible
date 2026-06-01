@@ -22,14 +22,18 @@
     - name: Set database name variable
       set_fact:
         db_name: "{{ db_detect.stdout_lines[0] }}"
+        dst_path: "{{ backup_share }}\\{{ db_detect.stdout_lines[0] }}"
 
     - name: Create folder automatically
       win_shell: |
-        cmd /c "if not exist {{ backup_share }}\{{ db_name }} mkdir {{ backup_share }}\{{ db_name }}"
+        $path = "{{ dst_path }}"
+        if (!(Test-Path -LiteralPath $path)) {
+          New-Item -ItemType Directory -Path $path -Force
+        }
 
     - name: Copy database files
       win_shell: |
-        robocopy "{{ src_path }}" "{{ backup_share }}\{{ db_name }}" "{{ db_name }}*" /Z /R:3 /W:5
+        robocopy "{{ src_path }}" "{{ dst_path }}" "{{ db_name }}*" /Z /R:3 /W:5
         if ($LASTEXITCODE -le 7) { exit 0 } else { exit $LASTEXITCODE }
 
     - name: Disconnect share
