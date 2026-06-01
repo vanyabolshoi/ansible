@@ -5,38 +5,34 @@
 
   vars:
     src_path: "C:\\DataSQL"
+    backup_share: "\\\\172.16.11.47\\BackupSQL"
     backup_user: "172.16.11.47\\vanyabolshoi"
     backup_pass: "Until1987"
 
   tasks:
-
-    - name: Map network drive
+    - name: Detect database and backup files
       win_shell: |
-        net use Z: \\172.16.11.47\BackupSQL /user:{{ backup_user }} {{ backup_pass }} /persistent:no
+        net use {{ backup_share }} /delete /y 2>$null
+        net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
 
-    - name: Detect database name automatically
-      win_shell: |
-        Get-ChildItem "{{ src_path }}" |
-        Where-Object { $_.Name -notlike "*_log*" } |
-        Select-Object -First 1 -ExpandProperty BaseName
-      register: db_detect
+        $db = Get-ChildItem "{{ src_path }}" |
+          Where-Object { $_.Name -notlike "*_log*" } |
+          Select-Object -First 1 -ExpandProperty BaseName
 
-    - name: Set db name
-      set_fact:
-        db_name: "{{ db_detect.stdout_lines[0] }}"
+        $dst = "{{ backup_share }}\$db"
 
-    - name: Create folder automatically
-      win_shell: |
-        if (!(Test-Path "Z:\{{ db_name }}")) {
-          New-Item -ItemType Directory -Path "Z:\{{ db_name }}" -Force
+        if (!(Test-Path -LiteralPath $dst)) {
+          New-Item -ItemType Directory -Path $dst -Force
         }
 
-    - name: Copy database files
-      win_shell: |
-        robocopy "{{ src_path }}" "Z:\{{ db_name }}" "{{ db_name }}*" /Z /R:3 /W:5
-        if ($LASTEXITCODE -le 7) { exit 0 } else { exit $LASTEXITCODE }
+        robocopy "{{ src_path }}" "$dst" "$db*" /Z /R:3 /W:5
 
-    - name: Unmap drive
-      win_shell: |
-        net use Z: /delete /y
-      ignore_errors: yes
+        $code = $LASTEXITCODE
+
+        net use {{ backup_share }} /delete /y
+
+        if ($code -le 7) {
+          exit 0
+        } else {
+          exit $code
+        }
