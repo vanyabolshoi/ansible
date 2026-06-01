@@ -9,11 +9,15 @@
     dst_path: "\\\\172.16.11.47\\BackupSQL\\{{ db_name }}"
 
   tasks:
+    - name: Connect share
+      win_shell: |
+        net use \\172.16.11.47\BackupSQL /user:172.16.11.47\vanyabolshoi Until1987
+
     - name: Create backup folder
       win_shell: |
         New-Item -ItemType Directory -Force -Path "{{ dst_path }}"
 
-    - name: Copy SQL database files
+    - name: Copy SQL files
       win_shell: |
         robocopy "{{ src_path }}" "{{ dst_path }}" "{{ db_name }}*" /Z /R:3 /W:5
         if ($LASTEXITCODE -le 7) { exit 0 } else { exit $LASTEXITCODE }
