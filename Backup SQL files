@@ -10,28 +10,29 @@
 
   tasks:
     - name: Run SQL backup and copy
-      win_shell: |
+      ansible.windows.win_shell: |
         net use {{ backup_share }} /delete /y 2>$null
         net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
 
-        $db = Get-ChildItem "C:\DataSQL" |
-          Where-Object { $_.Name -notlike "*_log*" -and $_.Name -notlike "*.bak" } |
+        $db = Get-ChildItem 'C:\DataSQL' |
+          Where-Object { $_.Name -notlike '*_log*' -and $_.Name -notlike '*.bak' } |
           Select-Object -First 1 -ExpandProperty BaseName
 
         $sqlService = Get-Service |
-          Where-Object { $_.Name -like "MSSQL$*" -and $_.Status -eq "Running" } |
+          Where-Object { $_.Name -like 'MSSQL$*' -and $_.Status -eq 'Running' } |
           Select-Object -First 1 -ExpandProperty Name
 
-        if ($sqlService -like "MSSQL$*") {
-          $instance = ".\" + $sqlService.Replace("MSSQL$", "")
+        if ($sqlService) {
+          $sqlName = $sqlService.Replace('MSSQL$', '')
+          $instance = '.\' + $sqlName
         } else {
-          $instance = "."
+          $instance = '.'
         }
 
         $localBak = "C:\Temp\$db.bak"
         $remoteDir = "{{ backup_share }}\$db"
 
-        New-Item -ItemType Directory -Path "C:\Temp" -Force | Out-Null
+        New-Item -ItemType Directory -Path 'C:\Temp' -Force | Out-Null
         New-Item -ItemType Directory -Path $remoteDir -Force | Out-Null
 
         sqlcmd -S $instance -Q "BACKUP DATABASE [$db] TO DISK = '$localBak' WITH FORMAT, INIT, NAME = 'Full Backup of $db', SKIP, NOREWIND, NOUNLOAD, STATS = 10"
@@ -42,7 +43,7 @@
           exit 10
         }
 
-        robocopy "C:\Temp" "$remoteDir" "$db.bak" /Z /R:3 /W:5
+        robocopy 'C:\Temp' "$remoteDir" "$db.bak" /Z /R:3 /W:5
         $copyCode = $LASTEXITCODE
 
         net use {{ backup_share }} /delete /y
