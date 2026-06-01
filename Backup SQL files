@@ -22,30 +22,25 @@
         $localBak = "C:\Temp\$db.bak"
         $remoteDir = "{{ backup_share }}\$db"
 
-        if (!(Test-Path "C:\Temp")) {
-          New-Item -ItemType Directory -Path "C:\Temp" -Force
+        New-Item -ItemType Directory -Path "C:\Temp" -Force | Out-Null
+        New-Item -ItemType Directory -Path $remoteDir -Force | Out-Null
+
+        sqlcmd -S "{{ sql_instance }}" -Q "BACKUP DATABASE [$db] TO DISK = '$localBak' WITH FORMAT, INIT, NAME = 'Full Backup of $db', SKIP, NOREWIND, NOUNLOAD, STATS = 10"
+
+        if (!(Test-Path $localBak)) {
+          Write-Error "SQL backup file was not created: $localBak"
+          net use {{ backup_share }} /delete /y
+          exit 10
         }
 
-        if (!(Test-Path $remoteDir)) {
-          New-Item -ItemType Directory -Path $remoteDir -Force
-        }
-
-        sqlcmd -S {{ sql_instance }} -Q "
-        BACKUP DATABASE [$db]
-        TO DISK = '$localBak'
-        WITH FORMAT, INIT,
-        NAME = 'Full Backup of $db',
-        SKIP, NOREWIND, NOUNLOAD, STATS = 10
-        "
-
-        robocopy C:\Temp $remoteDir "$db.bak" /Z /R:3 /W:5
-
-        Remove-Item $localBak -Force
+        robocopy "C:\Temp" "$remoteDir" "$db.bak" /Z /R:3 /W:5
+        $copyCode = $LASTEXITCODE
 
         net use {{ backup_share }} /delete /y
 
-        if ($LASTEXITCODE -le 7) {
+        if ($copyCode -le 7) {
+          Remove-Item $localBak -Force
           exit 0
         } else {
-          exit $LASTEXITCODE
+          exit $copyCode
         }
