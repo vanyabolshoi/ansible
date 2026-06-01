@@ -7,7 +7,6 @@
     backup_share: "\\\\172.16.11.47\\BackupSQL"
     backup_user: "172.16.11.47\\vanyabolshoi"
     backup_pass: "Until1987"
-    sql_instance: ".\\SQLEXPRESS"
 
   tasks:
     - name: Run SQL backup and copy
@@ -16,8 +15,18 @@
         net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
 
         $db = Get-ChildItem "C:\DataSQL" |
-          Where-Object { $_.Name -notlike "*_log*" } |
+          Where-Object { $_.Name -notlike "*_log*" -and $_.Name -notlike "*.bak" } |
           Select-Object -First 1 -ExpandProperty BaseName
+
+        $sqlService = Get-Service |
+          Where-Object { $_.Name -like "MSSQL$*" -and $_.Status -eq "Running" } |
+          Select-Object -First 1 -ExpandProperty Name
+
+        if ($sqlService -like "MSSQL$*") {
+          $instance = ".\" + $sqlService.Replace("MSSQL$", "")
+        } else {
+          $instance = "."
+        }
 
         $localBak = "C:\Temp\$db.bak"
         $remoteDir = "{{ backup_share }}\$db"
@@ -25,7 +34,7 @@
         New-Item -ItemType Directory -Path "C:\Temp" -Force | Out-Null
         New-Item -ItemType Directory -Path $remoteDir -Force | Out-Null
 
-        sqlcmd -S "{{ sql_instance }}" -Q "BACKUP DATABASE [$db] TO DISK = '$localBak' WITH FORMAT, INIT, NAME = 'Full Backup of $db', SKIP, NOREWIND, NOUNLOAD, STATS = 10"
+        sqlcmd -S $instance -Q "BACKUP DATABASE [$db] TO DISK = '$localBak' WITH FORMAT, INIT, NAME = 'Full Backup of $db', SKIP, NOREWIND, NOUNLOAD, STATS = 10"
 
         if (!(Test-Path $localBak)) {
           Write-Error "SQL backup file was not created: $localBak"
