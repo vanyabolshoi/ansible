@@ -1,0 +1,20 @@
+---
+- name: Backup SQL files
+  hosts: sql_source
+  gather_facts: no
+
+  vars:
+    src_path: "C:\\DataSQL"
+    db_name: "AC407"
+    dst_root: "\\\\172.16.11.47\\BackupSQL"
+    dst_path: "{{ dst_root }}\\{{ db_name }}\\{{ lookup('pipe','date +%Y-%m-%d_%H-%M') }}"
+
+  tasks:
+    - name: Create backup folder
+      win_shell: |
+        New-Item -ItemType Directory -Force -Path "{{ dst_path }}"
+
+    - name: Copy SQL database files
+      win_shell: |
+        robocopy "{{ src_path }}" "{{ dst_path }}" "{{ db_name }}*" /Z /R:3 /W:5
+        if ($LASTEXITCODE -le 7) { exit 0 } else { exit $LASTEXITCODE }
