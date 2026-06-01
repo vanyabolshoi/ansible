@@ -10,23 +10,26 @@
     backup_pass: "Until1987"
 
   tasks:
-
     - name: Connect network share
       win_shell: |
         net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
 
     - name: Detect database name automatically
       win_shell: |
-        Get-ChildItem {{ src_path }} | Where-Object { $_.Name -notlike "*_log*" } | Select-Object -First 1 -ExpandProperty BaseName
+        Get-ChildItem "{{ src_path }}" | Where-Object { $_.Name -notlike "*_log*" } | Select-Object -First 1 -ExpandProperty BaseName
       register: db_detect
+
+    - name: Set database name variable
+      set_fact:
+        db_name: "{{ db_detect.stdout_lines[0] }}"
 
     - name: Create folder automatically
       win_shell: |
-        cmd /c "if not exist {{ backup_share }}\{{ db_detect.stdout }} mkdir {{ backup_share }}\{{ db_detect.stdout }}"
+        cmd /c "if not exist {{ backup_share }}\{{ db_name }} mkdir {{ backup_share }}\{{ db_name }}"
 
     - name: Copy database files
       win_shell: |
-        robocopy "{{ src_path }}" "{{ backup_share }}\{{ db_detect.stdout }}" "{{ db_detect.stdout }}*" /Z /R:3 /W:5
+        robocopy "{{ src_path }}" "{{ backup_share }}\{{ db_name }}" "{{ db_name }}*" /Z /R:3 /W:5
         if ($LASTEXITCODE -le 7) { exit 0 } else { exit $LASTEXITCODE }
 
     - name: Disconnect share
