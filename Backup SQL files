@@ -1,5 +1,5 @@
 ---
-- name: SQL Server Backup
+- name: SQL Server Backup Direct To Share
   hosts: all
   gather_facts: no
 
@@ -9,7 +9,7 @@
     backup_pass: "Until1987"
 
   tasks:
-    - name: Run SQL backup and copy
+    - name: Run SQL backup directly to share
       ansible.windows.win_shell: |
         net use {{ backup_share }} /delete /y 2>$null
         net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
@@ -18,40 +18,34 @@
           Where-Object { $_.Name -notlike "*_log*" -and $_.Name -notlike "*.bak" } |
           Select-Object -First 1 -ExpandProperty BaseName
 
-        $sqlService = Get-Service | Where-Object { $_.Name -match "^MSSQL\$" } | Select-Object -First 1
+        $sqlService = Get-Service |
+          Where-Object { $_.Name -match "^MSSQL\$" } |
+          Select-Object -First 1
+
         $sqlName = $sqlService.Name -replace "MSSQL\$",""
         $instance = ".\$sqlName"
 
-        $localBak = "C:\Temp\$db.bak"
         $remoteDir = "{{ backup_share }}\$db"
+        $remoteBak = "$remoteDir\$db.bak"
 
-        New-Item -ItemType Directory -Path "C:\Temp" -Force | Out-Null
         New-Item -ItemType Directory -Path $remoteDir -Force | Out-Null
-
-        if (Test-Path $localBak) {
-          Remove-Item $localBak -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 2
-        }
 
         sqlcmd -S "$instance" -Q "ALTER DATABASE [$db] SET RECOVERY SIMPLE WITH NO_WAIT"
         sqlcmd -S "$instance" -Q "CHECKPOINT"
         sqlcmd -S "$instance" -Q "DBCC SHRINKDATABASE ([$db])"
 
-        sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$localBak' WITH FORMAT, INIT, COMPRESSION, NAME = 'Full Backup of $db', STATS = 10"
+        sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db]
+        TO DISK = '$remoteBak'
+        WITH FORMAT,
+             INIT,
+             COMPRESSION,
+             NAME = 'Full Backup of $db',
+             STATS = 10"
 
-        if (!(Test-Path $localBak)) {
+        if (!(Test-Path $remoteBak)) {
           net use {{ backup_share }} /delete /y
-          throw "Backup file not created"
+          throw 'Backup file was not created on share'
         }
-
-        robocopy "C:\Temp" "$remoteDir" "$db.bak" /Z /R:3 /W:5
-        $copyCode = $LASTEXITCODE
 
         net use {{ backup_share }} /delete /y
-
-        if ($copyCode -le 7) {
-          Remove-Item $localBak -Force
-          exit 0
-        }
-
-        exit $copyCode
+        exit 0
