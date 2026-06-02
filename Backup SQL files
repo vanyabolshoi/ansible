@@ -21,15 +21,25 @@
         New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
 
         $backupFile = "C:\TEMPO\$db.bak"
-        $syncFile = "C:\TEMPO\SyncSettings.ffs_gui"
-        $syncUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/SyncSettings.ffs_gui"
+        $syncFile = "C:\TEMPO\SyncSettings.ffs_batch"
+        $syncUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/SyncSettings.ffs_batch"
+        $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
 
         if (Test-Path $backupFile) {
           Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
         }
 
+        if (Test-Path $syncFile) {
+          Remove-Item $syncFile -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+        }
+
         Invoke-WebRequest -Uri $syncUrl -OutFile $syncFile -UseBasicParsing
+
+        if (!(Test-Path $syncFile)) {
+          throw "SyncSettings.ffs_batch was not downloaded"
+        }
 
         sqlcmd -S "$instance" -Q "ALTER DATABASE [$db] SET RECOVERY SIMPLE WITH NO_WAIT"
         sqlcmd -S "$instance" -Q "CHECKPOINT"
@@ -38,10 +48,14 @@
         sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$backupFile' WITH FORMAT, INIT, COMPRESSION, NAME = 'Full Backup of $db', STATS = 10"
 
         if (!(Test-Path $backupFile)) {
-          throw 'Backup file not created'
+          throw "Backup file not created"
         }
 
-        Write-Host "Backup created: $backupFile"
-        Write-Host "Sync file downloaded: $syncFile"
+        if (!(Test-Path $ffs)) {
+          throw "FreeFileSync not found: $ffs"
+        }
 
-        Start-Process -FilePath $syncFile
+        Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -Wait
+
+        Write-Host "Backup created: $backupFile"
+        Write-Host "Sync completed with: $syncFile"
