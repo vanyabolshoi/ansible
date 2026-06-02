@@ -4,7 +4,7 @@
   gather_facts: no
 
   tasks:
-    - name: Create local SQL backup
+    - name: Create local SQL backup and run SyncSettings
       ansible.windows.win_shell: |
 
         $db = Get-ChildItem "C:\DataSQL" |
@@ -12,7 +12,7 @@
           Select-Object -First 1 -ExpandProperty BaseName
 
         $sqlService = Get-Service |
-          Where-Object { $_.Name -match "^MSSQL\$" } |
+          Where-Object { $_.Name -like "MSSQL$*" } |
           Select-Object -First 1
 
         $sqlName = $sqlService.Name -replace "MSSQL\$",""
@@ -21,11 +21,15 @@
         New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
 
         $backupFile = "C:\TEMPO\$db.bak"
+        $syncFile = "C:\TEMPO\SyncSettings.ffs_gui"
+        $syncUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/SyncSettings.ffs_gui"
 
         if (Test-Path $backupFile) {
           Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
         }
+
+        Invoke-WebRequest -Uri $syncUrl -OutFile $syncFile -UseBasicParsing
 
         sqlcmd -S "$instance" -Q "ALTER DATABASE [$db] SET RECOVERY SIMPLE WITH NO_WAIT"
         sqlcmd -S "$instance" -Q "CHECKPOINT"
@@ -38,3 +42,6 @@
         }
 
         Write-Host "Backup created: $backupFile"
+        Write-Host "Sync file downloaded: $syncFile"
+
+        Start-Process -FilePath $syncFile
