@@ -44,9 +44,9 @@
           throw "Backup file not created"
         }
 
-        Start-Sleep -Seconds 30
+        Start-Sleep -Seconds 20
 
-        robocopy "C:\Temp" "$remoteDir" "$db.bak" /Z /R:10 /W:10
+        robocopy "C:\Temp" "$remoteDir" "$db.bak" /Z /R:30 /W:20
         $copyCode = $LASTEXITCODE
 
         net use {{ backup_share }} /delete /y
