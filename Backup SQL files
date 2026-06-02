@@ -15,6 +15,10 @@
           Where-Object { $_.Name -like "MSSQL$*" } |
           Select-Object -First 1
 
+        if (!$sqlService) {
+          throw "SQL Server service not found"
+        }
+
         $sqlName = $sqlService.Name -replace "MSSQL\$",""
         $instance = ".\$sqlName"
 
@@ -23,39 +27,45 @@
         $backupFile = "C:\TEMPO\$db.bak"
         $syncFile = "C:\TEMPO\SyncSettings.ffs_batch"
         $syncUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/SyncSettings.ffs_batch"
-        $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
 
+        # Удаляем старый backup
         if (Test-Path $backupFile) {
           Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
         }
 
+        # Удаляем старый SyncSettings
         if (Test-Path $syncFile) {
           Remove-Item $syncFile -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 2
         }
 
+        # Скачиваем свежий SyncSettings
         Invoke-WebRequest -Uri $syncUrl -OutFile $syncFile -UseBasicParsing
 
         if (!(Test-Path $syncFile)) {
           throw "SyncSettings.ffs_batch was not downloaded"
         }
 
+        # SIMPLE
         sqlcmd -S "$instance" -Q "ALTER DATABASE [$db] SET RECOVERY SIMPLE WITH NO_WAIT"
+
+        # CHECKPOINT
         sqlcmd -S "$instance" -Q "CHECKPOINT"
+
+        # SHRINK
         sqlcmd -S "$instance" -Q "DBCC SHRINKDATABASE ([$db])"
 
+        # BACKUP
         sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$backupFile' WITH FORMAT, INIT, COMPRESSION, NAME = 'Full Backup of $db', STATS = 10"
 
         if (!(Test-Path $backupFile)) {
           throw "Backup file not created"
         }
 
-        if (!(Test-Path $ffs)) {
-          throw "FreeFileSync not found: $ffs"
-        }
-
-        Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -Wait
-
         Write-Host "Backup created: $backupFile"
-        Write-Host "Sync completed with: $syncFile"
+
+        # Запуск SyncSettings
+        Start-Process "$syncFile"
+
+        Write-Host "SyncSettings started"
