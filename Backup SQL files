@@ -28,7 +28,13 @@
         New-Item -ItemType Directory -Path "C:\Temp" -Force | Out-Null
         New-Item -ItemType Directory -Path $remoteDir -Force | Out-Null
 
-        sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$localBak' WITH FORMAT, INIT, NAME = 'Full Backup of $db', STATS = 10"
+        sqlcmd -S "$instance" -Q "ALTER DATABASE [$db] SET RECOVERY SIMPLE WITH NO_WAIT"
+
+        sqlcmd -S "$instance" -Q "CHECKPOINT"
+
+        sqlcmd -S "$instance" -Q "DBCC SHRINKDATABASE ([$db])"
+
+        sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$localBak' WITH FORMAT, INIT, COMPRESSION, NAME = 'Full Backup of $db', STATS = 10"
 
         if (!(Test-Path $localBak)) {
           throw "Backup file not created"
