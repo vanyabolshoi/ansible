@@ -9,7 +9,7 @@
     backup_pass: "Until1987"
 
   tasks:
-    - name: Run SQL backup and copy
+    - name: Run SQL backup directly to share
       ansible.windows.win_shell: |
         net use {{ backup_share }} /delete /y 2>$null
         net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
@@ -22,26 +22,17 @@
         $sqlName = $sqlService.Name -replace "MSSQL\$",""
         $instance = ".\$sqlName"
 
-        $localBak = "C:\Temp\$db.bak"
         $remoteDir = "{{ backup_share }}\$db"
+        $remoteBak = "$remoteDir\$db.bak"
 
-        New-Item -ItemType Directory -Path "C:\Temp" -Force | Out-Null
         New-Item -ItemType Directory -Path $remoteDir -Force | Out-Null
 
-        sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$localBak' WITH FORMAT, INIT, NAME = 'Full Backup of $db', STATS = 10"
+        sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$remoteBak' WITH FORMAT, INIT, NAME = 'Full Backup of $db', STATS = 10"
 
-        if (!(Test-Path $localBak)) {
-          throw "Backup file not created"
+        if (!(Test-Path $remoteBak)) {
+          net use {{ backup_share }} /delete /y
+          throw "Backup file not created on share: $remoteBak"
         }
-
-        robocopy "C:\Temp" "$remoteDir" "$db.bak" /Z /R:3 /W:5
-        $copyCode = $LASTEXITCODE
 
         net use {{ backup_share }} /delete /y
-
-        if ($copyCode -le 7) {
-          Remove-Item $localBak -Force
-          exit 0
-        }
-
-        exit $copyCode
+        exit 0
