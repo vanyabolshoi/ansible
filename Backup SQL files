@@ -1,11 +1,20 @@
 ---
-- name: SQL Server Local Backup
+- name: SQL Server Local Backup and SyncSettings
   hosts: all
   gather_facts: no
+
+  vars:
+    backup_server: "172.16.11.47"
+    backup_share: "\\\\172.16.11.47\\BackupSQL"
+    backup_user: "172.16.11.47\\vanyabolshoi"
+    backup_pass: "Until1987"
 
   tasks:
     - name: Create local SQL backup and run SyncSettings
       ansible.windows.win_shell: |
+
+        cmdkey /add:{{ backup_server }} /user:{{ backup_user }} /pass:{{ backup_pass }}
+        net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:yes
 
         $db = Get-ChildItem "C:\DataSQL" |
           Where-Object { $_.Name -notlike "*_log*" -and $_.Name -notlike "*.bak" } |
@@ -28,44 +37,28 @@
         $syncFile = "C:\TEMPO\SyncSettings.ffs_batch"
         $syncUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/SyncSettings.ffs_batch"
 
-        # Удаляем старый backup
         if (Test-Path $backupFile) {
           Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
         }
 
-        # Удаляем старый SyncSettings
         if (Test-Path $syncFile) {
           Remove-Item $syncFile -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 2
         }
 
-        # Скачиваем свежий SyncSettings
         Invoke-WebRequest -Uri $syncUrl -OutFile $syncFile -UseBasicParsing
 
-        if (!(Test-Path $syncFile)) {
-          throw "SyncSettings.ffs_batch was not downloaded"
-        }
-
-        # SIMPLE
         sqlcmd -S "$instance" -Q "ALTER DATABASE [$db] SET RECOVERY SIMPLE WITH NO_WAIT"
-
-        # CHECKPOINT
         sqlcmd -S "$instance" -Q "CHECKPOINT"
-
-        # SHRINK
         sqlcmd -S "$instance" -Q "DBCC SHRINKDATABASE ([$db])"
-
-        # BACKUP
         sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$backupFile' WITH FORMAT, INIT, COMPRESSION, NAME = 'Full Backup of $db', STATS = 10"
 
         if (!(Test-Path $backupFile)) {
           throw "Backup file not created"
         }
 
-        Write-Host "Backup created: $backupFile"
-
-        # Запуск SyncSettings
         Start-Process "$syncFile"
 
+        Write-Host "Backup created: $backupFile"
         Write-Host "SyncSettings started"
