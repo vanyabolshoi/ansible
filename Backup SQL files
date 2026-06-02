@@ -1,35 +1,29 @@
 ---
-- name: SQL Server Backup
+- name: SQL Server Local Backup
   hosts: all
   gather_facts: no
 
-  vars:
-    backup_share: "\\\\172.16.11.47\\BackupSQL"
-    backup_user: "172.16.11.47\\vanyabolshoi"
-    backup_pass: "Until1987"
-
   tasks:
-    - name: Run SQL backup and copy
+    - name: Create local SQL backup
       ansible.windows.win_shell: |
-        net use {{ backup_share }} /delete /y 2>$null
-        net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
 
         $db = Get-ChildItem "C:\DataSQL" |
           Where-Object { $_.Name -notlike "*_log*" -and $_.Name -notlike "*.bak" } |
           Select-Object -First 1 -ExpandProperty BaseName
 
-        $sqlService = Get-Service | Where-Object { $_.Name -match "^MSSQL\$" } | Select-Object -First 1
+        $sqlService = Get-Service |
+          Where-Object { $_.Name -match "^MSSQL\$" } |
+          Select-Object -First 1
+
         $sqlName = $sqlService.Name -replace "MSSQL\$",""
         $instance = ".\$sqlName"
 
-        $localBak = "C:\Temp\$db.bak"
-        $remoteDir = "{{ backup_share }}\$db"
+        New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
 
-        New-Item -ItemType Directory -Path "C:\Temp" -Force | Out-Null
-        New-Item -ItemType Directory -Path $remoteDir -Force | Out-Null
+        $backupFile = "C:\TEMPO\$db.bak"
 
-        if (Test-Path $localBak) {
-          Remove-Item $localBak -Force -ErrorAction SilentlyContinue
+        if (Test-Path $backupFile) {
+          Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
         }
 
@@ -37,23 +31,10 @@
         sqlcmd -S "$instance" -Q "CHECKPOINT"
         sqlcmd -S "$instance" -Q "DBCC SHRINKDATABASE ([$db])"
 
-        sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$localBak' WITH FORMAT, INIT, COMPRESSION, NAME = 'Full Backup of $db', STATS = 10"
+        sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$backupFile' WITH FORMAT, INIT, COMPRESSION, NAME = 'Full Backup of $db', STATS = 10"
 
-        if (!(Test-Path $localBak)) {
-          net use {{ backup_share }} /delete /y
-          throw "Backup file not created"
+        if (!(Test-Path $backupFile)) {
+          throw 'Backup file not created'
         }
 
-        Start-Sleep -Seconds 20
-
-        robocopy "C:\Temp" "$remoteDir" "$db.bak" /Z /R:30 /W:20
-        $copyCode = $LASTEXITCODE
-
-        net use {{ backup_share }} /delete /y
-
-        if ($copyCode -le 7) {
-          Remove-Item $localBak -Force
-          exit 0
-        }
-
-        exit $copyCode
+        Write-Host "Backup created: $backupFile"
