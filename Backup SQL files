@@ -22,7 +22,7 @@
 
         New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
 
-        $ffsDir = "C:\Program Files\FreeFileSyncPortable"
+        $ffsDir = "C:\TEMPO\FreeFileSyncPortable"
         $ffs = ""
 
         $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSyncPortable.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -90,11 +90,6 @@
           Start-Sleep -Seconds 5
         }
 
-        if (Test-Path $remoteBak) {
-          Remove-Item $remoteBak -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 5
-        }
-
         if (Test-Path $syncFile) {
           Remove-Item $syncFile -Force -ErrorAction SilentlyContinue
         }
@@ -113,6 +108,9 @@
         if (!(Test-Path $backupFile)) {
           throw "Backup file not created: $backupFile"
         }
+
+        Write-Host "Waiting for backup file to unlock..."
+        Start-Sleep -Seconds 30
 
         Write-Host "Starting FreeFileSyncPortable: $ffs $syncFile"
         Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -Wait -NoNewWindow
