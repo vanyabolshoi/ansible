@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FreeFileSync XmlType="BATCH" XmlFormat="23">
+<FreeFileSync XmlType="GUI" XmlFormat="23">
     <Notes/>
     <Compare>
-        <Variant>Content</Variant>
+        <Variant>TimeAndSize</Variant>
         <Symlinks>Exclude</Symlinks>
         <IgnoreTimeShift/>
     </Compare>
@@ -35,14 +35,9 @@
             <Right>\\172.16.11.47\BackupSQL</Right>
         </Pair>
     </FolderPairs>
-    <Errors Ignore="false" Retry="5" Delay="10"/>
+    <Errors Ignore="false" Retry="0" Delay="5"/>
     <PostSyncCommand Condition="Completion"/>
     <LogFolder/>
     <EmailNotification Condition="Always"/>
-    <GridViewType>Difference</GridViewType>
-    <Batch>
-        <ProgressDialog Minimized="true" AutoClose="true"/>
-        <ErrorDialog>Show</ErrorDialog>
-        <PostSyncAction>None</PostSyncAction>
-    </Batch>
+    <GridViewType>Action</GridViewType>
 </FreeFileSync>
