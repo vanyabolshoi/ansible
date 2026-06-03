@@ -1,5 +1,5 @@
 ---
-- name: SQL Server Local Backup and FreeFileSync
+- name: SQL Server Backup with Robocopy
   hosts: all
   gather_facts: no
 
@@ -10,57 +10,17 @@
     backup_pass: "Until1987"
 
   tasks:
-    - name: Create backup and start FreeFileSync
+    - name: Create SQL backup and copy to backup server
       ansible.windows.win_shell: |
+        net use {{ backup_share }} /delete /y 2>$null
         cmdkey /add:{{ backup_server }} /user:{{ backup_user }} /pass:{{ backup_pass }}
-        net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:yes
+        net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
+
+        if (!(Test-Path "{{ backup_share }}")) {
+          throw "Cannot access backup share: {{ backup_share }}"
+        }
 
         New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
-
-        $ffsDir = "C:\Program Files\FreeFileSync"
-        $ffs = ""
-
-        $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-
-        if ($foundFfs) {
-          $ffs = $foundFfs.FullName
-        }
-
-        if (!(Test-Path $ffs)) {
-          Write-Host "FreeFileSync not found. Deploying portable version..."
-
-          $zip = "C:\TEMPO\FreeFileSync.zip"
-          $zipUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSync.zip"
-
-          if (Test-Path $zip) {
-            Remove-Item $zip -Force -ErrorAction SilentlyContinue
-          }
-
-          Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing
-
-          if (!(Test-Path $zip)) {
-            throw "FreeFileSync.zip was not downloaded"
-          }
-
-          if (Test-Path $ffsDir) {
-            Remove-Item $ffsDir -Recurse -Force -ErrorAction SilentlyContinue
-          }
-
-          New-Item -ItemType Directory -Path $ffsDir -Force | Out-Null
-          Expand-Archive -Path $zip -DestinationPath $ffsDir -Force
-
-          $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-
-          if ($foundFfs) {
-            $ffs = $foundFfs.FullName
-          }
-        }
-
-        if (!(Test-Path $ffs)) {
-          throw "FreeFileSync.exe not found"
-        }
-
-        Write-Host "FreeFileSync ready: $ffs"
 
         $db = Get-ChildItem "C:\DataSQL" |
           Where-Object { $_.Name -notlike "*_log*" -and $_.Name -notlike "*.bak" } |
@@ -82,22 +42,16 @@
         $instance = ".\$sqlName"
 
         $backupFile = "C:\TEMPO\$db.bak"
-        $syncFile = "C:\TEMPO\SyncSettings.ffs_batch"
-        $syncUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/SyncSettings.ffs_batch"
+        $remoteBak = "{{ backup_share }}\$db.bak"
 
         if (Test-Path $backupFile) {
           Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
         }
 
-        if (Test-Path $syncFile) {
-          Remove-Item $syncFile -Force -ErrorAction SilentlyContinue
-        }
-
-        Invoke-WebRequest -Uri $syncUrl -OutFile $syncFile -UseBasicParsing
-
-        if (!(Test-Path $syncFile)) {
-          throw "SyncSettings.ffs_batch was not downloaded"
+        if (Test-Path $remoteBak) {
+          Remove-Item $remoteBak -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 5
         }
 
         sqlcmd -S "$instance" -Q "ALTER DATABASE [$db] SET RECOVERY SIMPLE WITH NO_WAIT"
@@ -106,10 +60,28 @@
         sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$backupFile' WITH FORMAT, INIT, COMPRESSION, NAME = 'Full Backup of $db', STATS = 10"
 
         if (!(Test-Path $backupFile)) {
-          throw "Backup file not created"
+          throw "Backup file not created: $backupFile"
         }
 
-        $metaDir = "\\172.16.11.47\BackupSQL\_meta"
+        robocopy "C:\TEMPO" "{{ backup_share }}" "$db.bak" /Z /R:5 /W:10
+        $copyCode = $LASTEXITCODE
+
+        if ($copyCode -gt 7) {
+          throw "Robocopy failed with code $copyCode"
+        }
+
+        if (!(Test-Path $remoteBak)) {
+          throw "Remote backup not found after copy: $remoteBak"
+        }
+
+        $localSize = (Get-Item $backupFile).Length
+        $remoteSize = (Get-Item $remoteBak).Length
+
+        if ($localSize -ne $remoteSize) {
+          throw "Backup size mismatch. Local=$localSize Remote=$remoteSize"
+        }
+
+        $metaDir = "{{ backup_share }}\_meta"
         New-Item -ItemType Directory -Path $metaDir -Force | Out-Null
 
         $mdfFiles = Get-ChildItem "C:\DataSQL" |
@@ -127,7 +99,7 @@
         $mdfSizeMb = [math]::Round((($mdfFiles | Measure-Object Length -Sum).Sum / 1MB), 2)
         $logSizeMb = [math]::Round((($logFiles | Measure-Object Length -Sum).Sum / 1MB), 2)
         $dbSizeMb = [math]::Round(($mdfSizeMb + $logSizeMb), 2)
-        $bakSizeMb = [math]::Round(((Get-Item $backupFile).Length / 1MB), 2)
+        $bakSizeMb = [math]::Round(((Get-Item $remoteBak).Length / 1MB), 2)
 
         $compression = 0
         if ($dbSizeMb -gt 0) {
@@ -138,20 +110,24 @@
           database     = $db
           computer     = $env:COMPUTERNAME
           host         = "{{ inventory_hostname }}"
-          backup_time  = (Get-Item $backupFile).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+          backup_time  = (Get-Item $remoteBak).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
           mdf_size_mb  = $mdfSizeMb
           log_size_mb  = $logSizeMb
           db_size_mb   = $dbSizeMb
           bak_size_mb  = $bakSizeMb
           compression  = $compression
           status       = "OK"
+          copied       = $true
+          copy_method  = "robocopy"
         }
 
         $meta | ConvertTo-Json -Depth 5 | Out-File "$metaDir\$db.json" -Encoding UTF8
 
-        Write-Host "Starting FreeFileSync: $ffs $syncFile"
-        Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -Wait -NoNewWindow
+        Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
 
-        Write-Host "Backup created: $backupFile"
+        net use {{ backup_share }} /delete /y
+
+        Write-Host "Backup created locally: $backupFile"
+        Write-Host "Backup copied to server: $remoteBak"
+        Write-Host "Remote backup verified"
         Write-Host "Meta created: $metaDir\$db.json"
-        Write-Host "FreeFileSync finished"
