@@ -1,0 +1,35 @@
+$ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
+
+if (!(Test-Path $ffs)) {
+
+  Write-Host "FreeFileSync not found. Installing..."
+
+  $installer = "C:\TEMPO\FreeFileSync_14.9_Windows_Setup.exe"
+  $installerUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSync_14.9_Windows_Setup.exe"
+
+  Invoke-WebRequest `
+    -Uri $installerUrl `
+    -OutFile $installer `
+    -UseBasicParsing
+
+  if (!(Test-Path $installer)) {
+    throw "FreeFileSync installer was not downloaded"
+  }
+
+  Start-Process `
+    -FilePath $installer `
+    -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" `
+    -Wait
+
+  Start-Sleep -Seconds 10
+}
+
+$ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
+
+if (!(Test-Path $ffs)) {
+  $ffs = "C:\Program Files (x86)\FreeFileSync\FreeFileSync.exe"
+}
+
+if (!(Test-Path $ffs)) {
+  throw "FreeFileSync installation failed"
+}
