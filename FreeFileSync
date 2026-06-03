@@ -34,10 +34,9 @@
 
           Start-Process `
             -FilePath $installer `
-            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" `
-            -Wait
+            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
 
-          Start-Sleep -Seconds 15
+          Start-Sleep -Seconds 45
         }
 
         $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
