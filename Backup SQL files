@@ -22,52 +22,52 @@
 
         New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
 
-        # ===== Portable FreeFileSync =====
         $ffsDir = "C:\Program Files\FreeFileSync"
-        $ffs = ""
+        $standardFfs = "$ffsDir\FreeFileSync.exe"
 
-        $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-
-        if ($foundFfs) {
-          $ffs = $foundFfs.FullName
-        }
-
-        if (!(Test-Path $ffs)) {
-          Write-Host "FreeFileSync not found. Deploying portable version..."
+        if (!(Test-Path $standardFfs)) {
+          Write-Host "FreeFileSync standard path not found. Preparing portable version..."
 
           $zip = "C:\TEMPO\FreeFileSync.zip"
           $zipUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSync.zip"
 
-          if (Test-Path $zip) {
-            Remove-Item $zip -Force -ErrorAction SilentlyContinue
+          if (!(Test-Path $ffsDir)) {
+            New-Item -ItemType Directory -Path $ffsDir -Force | Out-Null
           }
-
-          Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing
-
-          if (!(Test-Path $zip)) {
-            throw "FreeFileSync.zip was not downloaded"
-          }
-
-          if (Test-Path $ffsDir) {
-            Remove-Item $ffsDir -Recurse -Force -ErrorAction SilentlyContinue
-          }
-
-          New-Item -ItemType Directory -Path $ffsDir -Force | Out-Null
-          Expand-Archive -Path $zip -DestinationPath $ffsDir -Force
 
           $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
 
-          if ($foundFfs) {
-            $ffs = $foundFfs.FullName
+          if (!$foundFfs) {
+            if (Test-Path $zip) {
+              Remove-Item $zip -Force -ErrorAction SilentlyContinue
+            }
+
+            Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing
+
+            if (!(Test-Path $zip)) {
+              throw "FreeFileSync.zip was not downloaded"
+            }
+
+            Expand-Archive -Path $zip -DestinationPath $ffsDir -Force
+
+            $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+
+          if (!$foundFfs) {
+            throw "FreeFileSync.exe not found after unzip"
+          }
+
+          if ($foundFfs.FullName -ne $standardFfs) {
+            Copy-Item $foundFfs.FullName $standardFfs -Force
           }
         }
 
-        if (!(Test-Path $ffs)) {
-          throw "FreeFileSync.exe not found"
+        if (!(Test-Path $standardFfs)) {
+          throw "FreeFileSync.exe not found at standard path"
         }
 
+        $ffs = $standardFfs
         Write-Host "FreeFileSync ready: $ffs"
-        # ================================
 
         $db = Get-ChildItem "C:\DataSQL" |
           Where-Object { $_.Name -notlike "*_log*" -and $_.Name -notlike "*.bak" } |
