@@ -1,5 +1,5 @@
 ---
-- name: Install FreeFileSync
+- name: Install FreeFileSync via Scheduled Task
   hosts: all
   gather_facts: no
 
@@ -9,38 +9,38 @@
         New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
 
         $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
-
         if (!(Test-Path $ffs)) {
           $ffs = "C:\Program Files (x86)\FreeFileSync\FreeFileSync.exe"
         }
 
         if (!(Test-Path $ffs)) {
-
-          Write-Host "FreeFileSync not found. Installing..."
-
           $installer = "C:\TEMPO\FreeFileSync_14.9_Windows_Setup.exe"
           $installerUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSync_14.9_Windows_Setup.exe"
 
           if (!(Test-Path $installer)) {
-            Invoke-WebRequest `
-              -Uri $installerUrl `
-              -OutFile $installer `
-              -UseBasicParsing
+            Invoke-WebRequest -Uri $installerUrl -OutFile $installer -UseBasicParsing
           }
 
-          if (!(Test-Path $installer)) {
-            throw "Installer was not downloaded"
-          }
+          $cmd = "`"$installer`" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
 
-          Start-Process `
-            -FilePath $installer `
-            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
+          schtasks /Delete /TN "InstallFreeFileSync" /F 2>$null
 
-          Start-Sleep -Seconds 45
+          schtasks /Create `
+            /TN "InstallFreeFileSync" `
+            /SC ONCE `
+            /ST 23:59 `
+            /TR $cmd `
+            /RL HIGHEST `
+            /RU "admin" `
+            /RP "Pharmacia_" `
+            /F
+
+          schtasks /Run /TN "InstallFreeFileSync"
+
+          Start-Sleep -Seconds 90
         }
 
         $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
-
         if (!(Test-Path $ffs)) {
           $ffs = "C:\Program Files (x86)\FreeFileSync\FreeFileSync.exe"
         }
@@ -48,5 +48,7 @@
         if (!(Test-Path $ffs)) {
           throw "FreeFileSync installation failed"
         }
+
+        schtasks /Delete /TN "InstallFreeFileSync" /F 2>$null
 
         Write-Host "FreeFileSync installed/found: $ffs"
