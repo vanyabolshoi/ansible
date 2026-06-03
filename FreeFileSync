@@ -1,54 +1,60 @@
 ---
-- name: Install FreeFileSync via Scheduled Task
+- name: Deploy Portable FreeFileSync
   hosts: all
   gather_facts: no
 
   tasks:
-    - name: Install FreeFileSync if missing
+    - name: Deploy portable FreeFileSync if missing
       ansible.windows.win_shell: |
         New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
 
-        $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
-        if (!(Test-Path $ffs)) {
-          $ffs = "C:\Program Files (x86)\FreeFileSync\FreeFileSync.exe"
-        }
+        $ffsDir = "C:\Program Files\FreeFileSync"
+        $ffsExe = "$ffsDir\FreeFileSync.exe"
 
-        if (!(Test-Path $ffs)) {
-          $installer = "C:\TEMPO\FreeFileSync_14.9_Windows_Setup.exe"
-          $installerUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSync_14.9_Windows_Setup.exe"
+        if (!(Test-Path $ffsExe)) {
 
-          if (!(Test-Path $installer)) {
-            Invoke-WebRequest -Uri $installerUrl -OutFile $installer -UseBasicParsing
+          Write-Host "FreeFileSync not found. Deploying portable version..."
+
+          $zip = "C:\TEMPO\FreeFileSync.zip"
+          $url = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSync.zip"
+
+          if (Test-Path $zip) {
+            Remove-Item $zip -Force -ErrorAction SilentlyContinue
           }
 
-          $cmd = "`"$installer`" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
+          Invoke-WebRequest `
+            -Uri $url `
+            -OutFile $zip `
+            -UseBasicParsing
 
-          schtasks /Delete /TN "InstallFreeFileSync" /F 2>$null
+          if (!(Test-Path $zip)) {
+            throw "FreeFileSync.zip was not downloaded"
+          }
 
-          schtasks /Create `
-            /TN "InstallFreeFileSync" `
-            /SC ONCE `
-            /ST 23:59 `
-            /TR $cmd `
-            /RL HIGHEST `
-            /RU "admin" `
-            /RP "Pharmacia_" `
-            /F
+          if (Test-Path $ffsDir) {
+            Remove-Item $ffsDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
 
-          schtasks /Run /TN "InstallFreeFileSync"
+          New-Item -ItemType Directory -Path $ffsDir -Force | Out-Null
 
-          Start-Sleep -Seconds 90
+          Expand-Archive `
+            -Path $zip `
+            -DestinationPath $ffsDir `
+            -Force
+
+          Start-Sleep -Seconds 3
         }
 
-        $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
-        if (!(Test-Path $ffs)) {
-          $ffs = "C:\Program Files (x86)\FreeFileSync\FreeFileSync.exe"
+        $ffsExe = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
+
+        if (!(Test-Path $ffsExe)) {
+          $found = Get-ChildItem "C:\Program Files\FreeFileSync" -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+          if ($found) {
+            Write-Host "FreeFileSync found in subfolder: $($found.FullName)"
+          } else {
+            throw "FreeFileSync.exe not found after unzip"
+          }
+        } else {
+          Write-Host "FreeFileSync installed/found: $ffsExe"
         }
-
-        if (!(Test-Path $ffs)) {
-          throw "FreeFileSync installation failed"
-        }
-
-        schtasks /Delete /TN "InstallFreeFileSync" /F 2>$null
-
-        Write-Host "FreeFileSync installed/found: $ffs"
