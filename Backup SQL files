@@ -63,36 +63,9 @@
           throw "Backup file not created: $backupFile"
         }
 
-        Write-Host "Waiting for backup file to be unlocked: $backupFile"
+        Start-Sleep -Seconds 60
 
-        $wait = 0
-        $unlocked = $false
-
-        while ($wait -lt 180) {
-          try {
-            $stream = [System.IO.File]::Open(
-              $backupFile,
-              [System.IO.FileMode]::Open,
-              [System.IO.FileAccess]::Read,
-              [System.IO.FileShare]::None
-            )
-
-            $stream.Close()
-            $unlocked = $true
-            Write-Host "Backup file unlocked after $wait seconds"
-            break
-          }
-          catch {
-            Start-Sleep -Seconds 5
-            $wait += 5
-          }
-        }
-
-        if (!$unlocked) {
-          throw "Backup file remained locked for 180 seconds: $backupFile"
-        }
-
-        robocopy "C:\TEMPO" "{{ backup_share }}" "$db.bak" /Z /R:5 /W:10
+        robocopy "C:\TEMPO" "{{ backup_share }}" "$db.bak" /Z /R:10 /W:15
         $copyCode = $LASTEXITCODE
 
         if ($copyCode -gt 7) {
@@ -110,7 +83,10 @@
           throw "Backup size mismatch. Local=$localSize Remote=$remoteSize"
         }
 
-        (Get-Item $remoteBak).LastWriteTime = Get-Date
+        $now = Get-Date
+        (Get-Item $remoteBak).CreationTime = $now
+        (Get-Item $remoteBak).LastWriteTime = $now
+        (Get-Item $remoteBak).LastAccessTime = $now
 
         $metaDir = "{{ backup_share }}\_meta"
         New-Item -ItemType Directory -Path $metaDir -Force | Out-Null
@@ -141,7 +117,7 @@
           database     = $db
           computer     = $env:COMPUTERNAME
           host         = "{{ inventory_hostname }}"
-          backup_time  = (Get-Item $remoteBak).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+          backup_time  = $now.ToString("yyyy-MM-dd HH:mm:ss")
           mdf_size_mb  = $mdfSizeMb
           log_size_mb  = $logSizeMb
           db_size_mb   = $dbSizeMb
@@ -158,7 +134,6 @@
 
         net use {{ backup_share }} /delete /y
 
-        Write-Host "Backup created locally: $backupFile"
         Write-Host "Backup copied to server: $remoteBak"
-        Write-Host "Remote backup verified"
+        Write-Host "Time fixed: $now"
         Write-Host "Meta created: $metaDir\$db.json"
