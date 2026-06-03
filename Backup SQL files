@@ -1,5 +1,5 @@
 ---
-- name: SQL Server Backup with Portable FreeFileSync
+- name: SQL Server Backup with FreeFileSyncPortable
   hosts: all
   gather_facts: no
 
@@ -10,7 +10,7 @@
     backup_pass: "Until1987"
 
   tasks:
-    - name: Create SQL backup and copy with Portable FreeFileSync
+    - name: Create SQL backup and copy with FreeFileSyncPortable
       ansible.windows.win_shell: |
         net use {{ backup_share }} /delete /y 2>$null
         cmdkey /add:{{ backup_server }} /user:{{ backup_user }} /pass:{{ backup_pass }}
@@ -22,52 +22,43 @@
 
         New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
 
-        $ffsDir = "C:\Program Files\FreeFileSync"
-        $standardFfs = "$ffsDir\FreeFileSync.exe"
+        $ffsDir = "C:\Program Files\FreeFileSyncPortable"
+        $ffs = ""
 
-        if (!(Test-Path $standardFfs)) {
-          Write-Host "FreeFileSync standard path not found. Preparing portable version..."
+        $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSyncPortable.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
 
-          $zip = "C:\TEMPO\FreeFileSync.zip"
-          $zipUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSync.zip"
+        if (!$foundFfs) {
+          Write-Host "FreeFileSyncPortable not found. Deploying..."
 
-          if (!(Test-Path $ffsDir)) {
-            New-Item -ItemType Directory -Path $ffsDir -Force | Out-Null
+          $zip = "C:\TEMPO\FreeFileSyncPortable.zip"
+          $zipUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSyncPortable.zip"
+
+          if (Test-Path $ffsDir) {
+            Remove-Item $ffsDir -Recurse -Force -ErrorAction SilentlyContinue
           }
 
-          $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-
-          if (!$foundFfs) {
-            if (Test-Path $zip) {
-              Remove-Item $zip -Force -ErrorAction SilentlyContinue
-            }
-
-            Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing
-
-            if (!(Test-Path $zip)) {
-              throw "FreeFileSync.zip was not downloaded"
-            }
-
-            Expand-Archive -Path $zip -DestinationPath $ffsDir -Force
-
-            $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (Test-Path $zip) {
+            Remove-Item $zip -Force -ErrorAction SilentlyContinue
           }
 
-          if (!$foundFfs) {
-            throw "FreeFileSync.exe not found after unzip"
+          Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing
+
+          if (!(Test-Path $zip)) {
+            throw "FreeFileSyncPortable.zip was not downloaded"
           }
 
-          if ($foundFfs.FullName -ne $standardFfs) {
-            Copy-Item $foundFfs.FullName $standardFfs -Force
-          }
+          New-Item -ItemType Directory -Path $ffsDir -Force | Out-Null
+          Expand-Archive -Path $zip -DestinationPath $ffsDir -Force
+
+          $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSyncPortable.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
         }
 
-        if (!(Test-Path $standardFfs)) {
-          throw "FreeFileSync.exe not found at standard path"
+        if (!$foundFfs) {
+          throw "FreeFileSyncPortable.exe not found"
         }
 
-        $ffs = $standardFfs
-        Write-Host "FreeFileSync ready: $ffs"
+        $ffs = $foundFfs.FullName
+        Write-Host "FreeFileSyncPortable ready: $ffs"
 
         $db = Get-ChildItem "C:\DataSQL" |
           Where-Object { $_.Name -notlike "*_log*" -and $_.Name -notlike "*.bak" } |
@@ -123,11 +114,11 @@
           throw "Backup file not created: $backupFile"
         }
 
-        Write-Host "Starting FreeFileSync: $ffs $syncFile"
+        Write-Host "Starting FreeFileSyncPortable: $ffs $syncFile"
         Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -Wait -NoNewWindow
 
         if (!(Test-Path $remoteBak)) {
-          throw "Remote backup not found after FreeFileSync: $remoteBak"
+          throw "Remote backup not found after FreeFileSyncPortable: $remoteBak"
         }
 
         $localSize = (Get-Item $backupFile).Length
@@ -179,7 +170,7 @@
           compression  = $compression
           status       = "OK"
           copied       = $true
-          copy_method  = "FreeFileSync portable"
+          copy_method  = "FreeFileSyncPortable"
         }
 
         $meta | ConvertTo-Json -Depth 5 | Out-File "$metaDir\$db.json" -Encoding UTF8
