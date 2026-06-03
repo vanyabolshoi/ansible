@@ -55,13 +55,21 @@
         $metaDir = "\\172.16.11.47\BackupSQL\_meta"
         New-Item -ItemType Directory -Path $metaDir -Force | Out-Null
 
-        $dbFiles = Get-ChildItem "C:\DataSQL" |
+        $mdfFiles = Get-ChildItem "C:\DataSQL" |
           Where-Object {
             $_.Name -like "$db*" -and
-            $_.Extension -in ".mdf",".ndf",".ldf"
+            $_.Extension -in ".mdf",".ndf"
           }
 
-        $dbSizeMb = [math]::Round((($dbFiles | Measure-Object Length -Sum).Sum / 1MB), 2)
+        $logFiles = Get-ChildItem "C:\DataSQL" |
+          Where-Object {
+            $_.Name -like "$db*" -and
+            $_.Extension -eq ".ldf"
+          }
+
+        $mdfSizeMb = [math]::Round((($mdfFiles | Measure-Object Length -Sum).Sum / 1MB), 2)
+        $logSizeMb = [math]::Round((($logFiles | Measure-Object Length -Sum).Sum / 1MB), 2)
+        $dbSizeMb = [math]::Round(($mdfSizeMb + $logSizeMb), 2)
         $bakSizeMb = [math]::Round(((Get-Item $backupFile).Length / 1MB), 2)
 
         $compression = 0
@@ -74,6 +82,8 @@
           computer     = $env:COMPUTERNAME
           host         = "{{ inventory_hostname }}"
           backup_time  = (Get-Item $backupFile).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+          mdf_size_mb  = $mdfSizeMb
+          log_size_mb  = $logSizeMb
           db_size_mb   = $dbSizeMb
           bak_size_mb  = $bakSizeMb
           compression  = $compression
