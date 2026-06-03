@@ -31,7 +31,6 @@
         $backupFile = "C:\TEMPO\$db.bak"
         $syncFile = "C:\TEMPO\SyncSettings.ffs_batch"
         $syncUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/SyncSettings.ffs_batch"
-        $logFile = "C:\TEMPO\FreeFileSync.log"
 
         if (Test-Path $backupFile) {
           Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
@@ -53,6 +52,36 @@
           throw "Backup file not created"
         }
 
+        $metaDir = "\\172.16.11.47\BackupSQL\_meta"
+        New-Item -ItemType Directory -Path $metaDir -Force | Out-Null
+
+        $dbFiles = Get-ChildItem "C:\DataSQL" |
+          Where-Object {
+            $_.Name -like "$db*" -and
+            $_.Extension -in ".mdf",".ndf",".ldf"
+          }
+
+        $dbSizeMb = [math]::Round((($dbFiles | Measure-Object Length -Sum).Sum / 1MB), 2)
+        $bakSizeMb = [math]::Round(((Get-Item $backupFile).Length / 1MB), 2)
+
+        $compression = 0
+        if ($dbSizeMb -gt 0) {
+          $compression = [math]::Round((100 - (($bakSizeMb / $dbSizeMb) * 100)), 1)
+        }
+
+        $meta = @{
+          database     = $db
+          computer     = $env:COMPUTERNAME
+          host         = "{{ inventory_hostname }}"
+          backup_time  = (Get-Item $backupFile).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+          db_size_mb   = $dbSizeMb
+          bak_size_mb  = $bakSizeMb
+          compression  = $compression
+          status       = "OK"
+        }
+
+        $meta | ConvertTo-Json -Depth 5 | Out-File "$metaDir\$db.json" -Encoding UTF8
+
         $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
         if (!(Test-Path $ffs)) {
           $ffs = "C:\Program Files (x86)\FreeFileSync\FreeFileSync.exe"
@@ -63,8 +92,8 @@
         }
 
         Write-Host "Starting FreeFileSync: $ffs $syncFile"
-
         Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -Wait -NoNewWindow
 
         Write-Host "Backup created: $backupFile"
+        Write-Host "Meta created: $metaDir\$db.json"
         Write-Host "FreeFileSync finished"
