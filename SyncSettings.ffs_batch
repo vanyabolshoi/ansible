@@ -35,13 +35,13 @@
             <Right>\\172.16.11.47\BackupSQL</Right>
         </Pair>
     </FolderPairs>
-    <Errors Ignore="true" Retry="0" Delay="5"/>
+    <Errors Ignore="false" Retry="5" Delay="10"/>
     <PostSyncCommand Condition="Completion"/>
     <LogFolder/>
     <EmailNotification Condition="Always"/>
     <GridViewType>Difference</GridViewType>
     <Batch>
-        <ProgressDialog Minimized="false" AutoClose="true"/>
+        <ProgressDialog Minimized="true" AutoClose="true"/>
         <ErrorDialog>Show</ErrorDialog>
         <PostSyncAction>None</PostSyncAction>
     </Batch>
