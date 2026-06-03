@@ -1,58 +1,53 @@
 ---
-
-* name: Install FreeFileSync
+- name: Install FreeFileSync
   hosts: all
   gather_facts: no
 
   tasks:
+    - name: Install FreeFileSync if missing
+      ansible.windows.win_shell: |
+        New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
 
-  * name: Install FreeFileSync if missing
-    ansible.windows.win_shell: |
-    New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
+        $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
 
-    $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
+        if (!(Test-Path $ffs)) {
+          $ffs = "C:\Program Files (x86)\FreeFileSync\FreeFileSync.exe"
+        }
 
-    if (!(Test-Path $ffs)) {
-    $ffs = "C:\Program Files (x86)\FreeFileSync\FreeFileSync.exe"
-    }
+        if (!(Test-Path $ffs)) {
 
-    if (!(Test-Path $ffs)) {
+          Write-Host "FreeFileSync not found. Installing..."
 
-    ```
-    Write-Host "FreeFileSync not found. Installing..."
+          $installer = "C:\TEMPO\FreeFileSync_14.9_Windows_Setup.exe"
+          $installerUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSync_14.9_Windows_Setup.exe"
 
-    $installer = "C:\TEMPO\FreeFileSync_14.9_Windows_Setup.exe"
-    $installerUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSync_14.9_Windows_Setup.exe"
+          if (!(Test-Path $installer)) {
+            Invoke-WebRequest `
+              -Uri $installerUrl `
+              -OutFile $installer `
+              -UseBasicParsing
+          }
 
-    if (!(Test-Path $installer)) {
-      Invoke-WebRequest `
-        -Uri $installerUrl `
-        -OutFile $installer `
-        -UseBasicParsing
-    }
+          if (!(Test-Path $installer)) {
+            throw "Installer was not downloaded"
+          }
 
-    if (!(Test-Path $installer)) {
-      throw "Installer was not downloaded"
-    }
+          Start-Process `
+            -FilePath $installer `
+            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" `
+            -Wait
 
-    Start-Process `
-      -FilePath $installer `
-      -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" `
-      -Wait
+          Start-Sleep -Seconds 15
+        }
 
-    Start-Sleep -Seconds 15
-    ```
+        $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
 
-    }
+        if (!(Test-Path $ffs)) {
+          $ffs = "C:\Program Files (x86)\FreeFileSync\FreeFileSync.exe"
+        }
 
-    $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
+        if (!(Test-Path $ffs)) {
+          throw "FreeFileSync installation failed"
+        }
 
-    if (!(Test-Path $ffs)) {
-    $ffs = "C:\Program Files (x86)\FreeFileSync\FreeFileSync.exe"
-    }
-
-    if (!(Test-Path $ffs)) {
-    throw "FreeFileSync installation failed"
-    }
-
-    Write-Host "FreeFileSync installed/found: $ffs"
+        Write-Host "FreeFileSync installed/found: $ffs"
