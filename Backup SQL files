@@ -63,6 +63,35 @@
           throw "Backup file not created: $backupFile"
         }
 
+        Write-Host "Waiting for backup file to be unlocked: $backupFile"
+
+        $wait = 0
+        $unlocked = $false
+
+        while ($wait -lt 180) {
+          try {
+            $stream = [System.IO.File]::Open(
+              $backupFile,
+              [System.IO.FileMode]::Open,
+              [System.IO.FileAccess]::Read,
+              [System.IO.FileShare]::None
+            )
+
+            $stream.Close()
+            $unlocked = $true
+            Write-Host "Backup file unlocked after $wait seconds"
+            break
+          }
+          catch {
+            Start-Sleep -Seconds 5
+            $wait += 5
+          }
+        }
+
+        if (!$unlocked) {
+          throw "Backup file remained locked for 180 seconds: $backupFile"
+        }
+
         robocopy "C:\TEMPO" "{{ backup_share }}" "$db.bak" /Z /R:5 /W:10
         $copyCode = $LASTEXITCODE
 
@@ -80,6 +109,8 @@
         if ($localSize -ne $remoteSize) {
           throw "Backup size mismatch. Local=$localSize Remote=$remoteSize"
         }
+
+        (Get-Item $remoteBak).LastWriteTime = Get-Date
 
         $metaDir = "{{ backup_share }}\_meta"
         New-Item -ItemType Directory -Path $metaDir -Force | Out-Null
