@@ -1,5 +1,5 @@
 ---
-- name: SQL Server Local Backup and FreeFileSync Test
+- name: SQL Server Local Backup and FreeFileSync
   hosts: all
   gather_facts: no
 
@@ -15,18 +15,76 @@
         cmdkey /add:{{ backup_server }} /user:{{ backup_user }} /pass:{{ backup_pass }}
         net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:yes
 
+        New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
+
+        # ===== Deploy portable FreeFileSync if missing =====
+        $ffsDir = "C:\Program Files\FreeFileSync"
+        $ffs = "$ffsDir\FreeFileSync.exe"
+
+        if (!(Test-Path $ffs)) {
+          Write-Host "FreeFileSync not found. Deploying portable version..."
+
+          $zip = "C:\TEMPO\FreeFileSync.zip"
+          $zipUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSync.zip"
+
+          if (Test-Path $zip) {
+            Remove-Item $zip -Force -ErrorAction SilentlyContinue
+          }
+
+          Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing
+
+          if (!(Test-Path $zip)) {
+            throw "FreeFileSync.zip was not downloaded"
+          }
+
+          if (Test-Path $ffsDir) {
+            Remove-Item $ffsDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+          New-Item -ItemType Directory -Path $ffsDir -Force | Out-Null
+
+          Expand-Archive -Path $zip -DestinationPath $ffsDir -Force
+
+          $found = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+          if ($found) {
+            $ffs = $found.FullName
+            Write-Host "FreeFileSync deployed: $ffs"
+          }
+        }
+
+        if (!(Test-Path $ffs)) {
+          $found = Get-ChildItem "C:\Program Files\FreeFileSync" -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($found) {
+            $ffs = $found.FullName
+          }
+        }
+
+        if (!(Test-Path $ffs)) {
+          throw "FreeFileSync.exe not found"
+        }
+
+        Write-Host "FreeFileSync ready: $ffs"
+        # ===================================================
+
         $db = Get-ChildItem "C:\DataSQL" |
           Where-Object { $_.Name -notlike "*_log*" -and $_.Name -notlike "*.bak" } |
           Select-Object -First 1 -ExpandProperty BaseName
+
+        if (!$db) {
+          throw "Database file not found in C:\DataSQL"
+        }
 
         $sqlService = Get-Service |
           Where-Object { $_.Name -like "MSSQL$*" } |
           Select-Object -First 1
 
+        if (!$sqlService) {
+          throw "SQL Server service not found"
+        }
+
         $sqlName = $sqlService.Name -replace "MSSQL\$",""
         $instance = ".\$sqlName"
-
-        New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
 
         $backupFile = "C:\TEMPO\$db.bak"
         $syncFile = "C:\TEMPO\SyncSettings.ffs_batch"
@@ -42,6 +100,10 @@
         }
 
         Invoke-WebRequest -Uri $syncUrl -OutFile $syncFile -UseBasicParsing
+
+        if (!(Test-Path $syncFile)) {
+          throw "SyncSettings.ffs_batch was not downloaded"
+        }
 
         sqlcmd -S "$instance" -Q "ALTER DATABASE [$db] SET RECOVERY SIMPLE WITH NO_WAIT"
         sqlcmd -S "$instance" -Q "CHECKPOINT"
@@ -91,15 +153,6 @@
         }
 
         $meta | ConvertTo-Json -Depth 5 | Out-File "$metaDir\$db.json" -Encoding UTF8
-
-        $ffs = "C:\Program Files\FreeFileSync\FreeFileSync.exe"
-        if (!(Test-Path $ffs)) {
-          $ffs = "C:\Program Files (x86)\FreeFileSync\FreeFileSync.exe"
-        }
-
-        if (!(Test-Path $ffs)) {
-          throw "FreeFileSync.exe not found"
-        }
 
         Write-Host "Starting FreeFileSync: $ffs $syncFile"
         Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -Wait -NoNewWindow
