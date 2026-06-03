@@ -17,9 +17,14 @@
 
         New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
 
-        # ===== Deploy portable FreeFileSync if missing =====
         $ffsDir = "C:\Program Files\FreeFileSync"
-        $ffs = "$ffsDir\FreeFileSync.exe"
+        $ffs = ""
+
+        $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+        if ($foundFfs) {
+          $ffs = $foundFfs.FullName
+        }
 
         if (!(Test-Path $ffs)) {
           Write-Host "FreeFileSync not found. Deploying portable version..."
@@ -42,21 +47,12 @@
           }
 
           New-Item -ItemType Directory -Path $ffsDir -Force | Out-Null
-
           Expand-Archive -Path $zip -DestinationPath $ffsDir -Force
 
-          $found = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
 
-          if ($found) {
-            $ffs = $found.FullName
-            Write-Host "FreeFileSync deployed: $ffs"
-          }
-        }
-
-        if (!(Test-Path $ffs)) {
-          $found = Get-ChildItem "C:\Program Files\FreeFileSync" -Recurse -Filter "FreeFileSync.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($found) {
-            $ffs = $found.FullName
+          if ($foundFfs) {
+            $ffs = $foundFfs.FullName
           }
         }
 
@@ -65,7 +61,6 @@
         }
 
         Write-Host "FreeFileSync ready: $ffs"
-        # ===================================================
 
         $db = Get-ChildItem "C:\DataSQL" |
           Where-Object { $_.Name -notlike "*_log*" -and $_.Name -notlike "*.bak" } |
