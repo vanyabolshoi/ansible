@@ -1,0 +1,181 @@
+---
+- name: Check pharmacy internet provider and write to dashboard
+  hosts: all
+  gather_facts: no
+  serial: 20
+  strategy: linear
+  any_errors_fatal: false
+  max_fail_percentage: 100
+  ignore_unreachable: yes
+
+  vars:
+    backup_server: "172.16.11.226"
+    backup_share: "\\\\172.16.11.226\\BackupSQL"
+    backup_user: "172.16.11.226\\Администратор"
+    backup_pass: "Pharmacia_"
+
+  tasks:
+    - name: Detect public IP and ISP provider
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = "Stop"
+        $db = $null
+
+        function Write-ProviderResult {
+          param(
+            [string]$Database,
+            [string]$Provider,
+            [string]$PublicIp,
+            [string]$Org,
+            [string]$Asn,
+            [string]$City,
+            [string]$Country,
+            [string]$Source,
+            [string]$Status,
+            [string]$ErrorText = ""
+          )
+
+          $providerDir = "{{ backup_share }}\_provider"
+          New-Item -ItemType Directory -Path $providerDir -Force | Out-Null
+
+          if (!$Database) {
+            $Database = "unknown_{{ inventory_hostname }}"
+          }
+
+          $localIp = ""
+          try {
+            $localIp = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.IPAddress -notlike "127.*" -and
+                $_.IPAddress -notlike "169.254*" -and
+                $_.IPAddress -notlike "0.*"
+              } |
+              Select-Object -First 1 -ExpandProperty IPAddress)
+          } catch {}
+
+          $data = @{
+            database   = $Database
+            computer   = $env:COMPUTERNAME
+            host       = "{{ inventory_hostname }}"
+            local_ip   = $localIp
+            public_ip  = $PublicIp
+            provider   = $Provider
+            org        = $Org
+            asn        = $Asn
+            city       = $City
+            country    = $Country
+            source     = $Source
+            status     = $Status
+            error      = $ErrorText
+            time       = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+          }
+
+          $data | ConvertTo-Json -Depth 5 | Out-File "$providerDir\$Database.json" -Encoding UTF8
+        }
+
+        try {
+          net use {{ backup_share }} /delete /y 2>$null
+          net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
+
+          if (!(Test-Path "{{ backup_share }}")) {
+            throw "Cannot access backup share: {{ backup_share }}"
+          }
+
+          $sqlService = Get-Service |
+            Where-Object { $_.Name -like "MSSQL$*" } |
+            Select-Object -First 1
+
+          if ($sqlService) {
+            $sqlName = $sqlService.Name -replace "MSSQL\$",""
+            $instance = ".\$sqlName"
+
+            $dbInfo = sqlcmd -S "$instance" -h -1 -W -Q "
+            SET NOCOUNT ON;
+            SELECT TOP 1 DB_NAME(database_id)
+            FROM sys.master_files
+            WHERE type_desc = 'ROWS'
+              AND DB_NAME(database_id) NOT IN ('master','model','msdb','tempdb')
+              AND physical_name LIKE 'C:\DataSQL%'
+            ORDER BY database_id;
+            "
+
+            $db = ($dbInfo | Where-Object { $_ -and $_.Trim() -ne "" } | Select-Object -First 1).Trim()
+          }
+
+          if (!$db) {
+            $db = "unknown_{{ inventory_hostname }}"
+          }
+
+          $provider = ""
+          $publicIp = ""
+          $org = ""
+          $asn = ""
+          $city = ""
+          $country = ""
+          $source = ""
+
+          try {
+            $r = Invoke-RestMethod -Uri "http://ip-api.com/json/?fields=status,message,query,isp,org,as,city,country" -TimeoutSec 20
+            if ($r.status -eq "success") {
+              $publicIp = [string]$r.query
+              $provider = [string]$r.isp
+              $org = [string]$r.org
+              $asn = [string]$r.as
+              $city = [string]$r.city
+              $country = [string]$r.country
+              $source = "ip-api.com"
+            }
+          } catch {}
+
+          if (!$publicIp) {
+            try {
+              $r2 = Invoke-RestMethod -Uri "https://ipinfo.io/json" -TimeoutSec 20
+              $publicIp = [string]$r2.ip
+              $provider = [string]$r2.org
+              $org = [string]$r2.org
+              $asn = [string]$r2.org
+              $city = [string]$r2.city
+              $country = [string]$r2.country
+              $source = "ipinfo.io"
+            } catch {}
+          }
+
+          if (!$publicIp) {
+            try {
+              $r3 = Invoke-RestMethod -Uri "https://api.ipify.org?format=json" -TimeoutSec 20
+              $publicIp = [string]$r3.ip
+              $provider = "unknown"
+              $source = "api.ipify.org"
+            } catch {}
+          }
+
+          if (!$publicIp) {
+            Write-ProviderResult -Database $db -Provider "unknown" -PublicIp "" -Org "" -Asn "" -City "" -Country "" -Source "none" -Status "ERROR" -ErrorText "Cannot detect public IP/provider"
+            throw "Cannot detect public IP/provider"
+          }
+
+          if (!$provider) {
+            $provider = $org
+          }
+
+          Write-ProviderResult -Database $db -Provider $provider -PublicIp $publicIp -Org $org -Asn $asn -City $city -Country $country -Source $source -Status "OK"
+
+          Write-Host "Database: $db"
+          Write-Host "Public IP: $publicIp"
+          Write-Host "Provider: $provider"
+          Write-Host "Source: $source"
+
+          exit 0
+        }
+        catch {
+          try {
+            Write-ProviderResult -Database $db -Provider "unknown" -PublicIp "" -Org "" -Asn "" -City "" -Country "" -Source "error" -Status "ERROR" -ErrorText $_.Exception.Message
+          } catch {}
+
+          Write-Host "PROVIDER CHECK ERROR on {{ inventory_hostname }}: $($_.Exception.Message)"
+          exit 1
+        }
+        finally {
+          net use {{ backup_share }} /delete /y 2>$null
+        }
+      ignore_errors: yes
+      ignore_unreachable: yes
