@@ -31,7 +31,7 @@
         <FolderPairs>
             <Pair>
                 <Left>C:\TEMPO</Left>
-                <Right>\\172.16.11.47\BackupSQL</Right>
+                <Right>\\172.16.11.226\BackupSQL</Right>
             </Pair>
         </FolderPairs>
         <OnCompletion/>
