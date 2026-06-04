@@ -73,7 +73,7 @@
         }
 
         try {
-          net use {{ backup_share }} /delete /y 2>$null
+          cmd /c "net use {{ backup_share }} /delete /y >nul 2>&1"
           net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
 
           if (!(Test-Path "{{ backup_share }}")) {
@@ -175,7 +175,7 @@
           exit 1
         }
         finally {
-          net use {{ backup_share }} /delete /y 2>$null
+          cmd /c "net use {{ backup_share }} /delete /y >nul 2>&1"
         }
       ignore_errors: yes
       ignore_unreachable: yes
