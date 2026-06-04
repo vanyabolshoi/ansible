@@ -4,10 +4,10 @@
   gather_facts: no
 
   vars:
-    backup_server: "172.16.11.47"
-    backup_share: "\\\\172.16.11.47\\BackupSQL"
-    backup_user: "172.16.11.47\\vanyabolshoi"
-    backup_pass: "Until1987"
+    backup_server: "172.16.11.226"
+    backup_share: "\\\\172.16.11.226\\BackupSQL"
+    backup_user: "172.16.11.226\\Администратор"
+    backup_pass: "Pharmacia_"
 
   tasks:
     - name: Create SQL backup and copy with FreeFileSyncPortable
