@@ -1,0 +1,132 @@
+---
+- name: Scan SQL databases and write discovered list to dashboard
+  hosts: all
+  gather_facts: no
+  serial: 20
+  strategy: linear
+  any_errors_fatal: false
+  max_fail_percentage: 100
+  ignore_unreachable: yes
+
+  vars:
+    backup_server: "172.16.11.226"
+    backup_share: "\\\\172.16.11.226\\BackupSQL"
+    backup_user: "172.16.11.226\\Администратор"
+    backup_pass: "Pharmacia_"
+
+  tasks:
+    - name: Discover SQL databases only
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = "Stop"
+
+        function Write-DiscoveredResult {
+          param(
+            [string]$Status,
+            [string]$ErrorText = "",
+            [array]$Databases = @()
+          )
+
+          $discoveredDir = "{{ backup_share }}\_discovered"
+          New-Item -ItemType Directory -Path $discoveredDir -Force | Out-Null
+
+          $safeName = "{{ inventory_hostname }}" -replace '[\\/:*?"<>|]', '_'
+          $file = "$discoveredDir\$safeName.json"
+
+          $data = @{
+            host      = "{{ inventory_hostname }}"
+            computer  = $env:COMPUTERNAME
+            status    = $Status
+            error     = $ErrorText
+            count     = @($Databases).Count
+            databases = $Databases
+            time      = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+          }
+
+          $data | ConvertTo-Json -Depth 10 | Out-File $file -Encoding UTF8
+        }
+
+        try {
+          cmd /c "net use {{ backup_share }} /delete /y >nul 2>&1"
+          net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
+
+          if (!(Test-Path "{{ backup_share }}")) {
+            throw "Cannot access backup share: {{ backup_share }}"
+          }
+
+          $sqlService = Get-Service |
+            Where-Object { $_.Name -like "MSSQL$*" } |
+            Select-Object -First 1
+
+          if (!$sqlService) {
+            Write-DiscoveredResult -Status "ERROR" -ErrorText "SQL Server service not found" -Databases @()
+            throw "SQL Server service not found"
+          }
+
+          $sqlName = $sqlService.Name -replace "MSSQL\$",""
+          $instance = ".\$sqlName"
+
+          $rows = sqlcmd -S "$instance" -h -1 -W -Q "
+          SET NOCOUNT ON;
+          SELECT
+            DB_NAME(mf.database_id) + '|' +
+            ISNULL(CONVERT(varchar(50), SUM(CAST(mf.size AS bigint)) * 8 / 1024), '0') + '|' +
+            ISNULL(MAX(CASE WHEN mf.type_desc = 'ROWS' THEN mf.physical_name END), '')
+          FROM sys.master_files mf
+          WHERE DB_NAME(mf.database_id) NOT IN ('master','model','msdb','tempdb')
+            AND mf.physical_name LIKE 'C:\DataSQL%'
+          GROUP BY mf.database_id
+          ORDER BY DB_NAME(mf.database_id);
+          "
+
+          $dbs = @()
+
+          foreach ($line in $rows) {
+            $line = [string]$line
+            if (!$line -or $line.Trim() -eq "") { continue }
+            if ($line -notlike "*|*") { continue }
+
+            $parts = $line.Split('|')
+            $dbName = $parts[0].Trim()
+            $sizeMb = 0
+            try { $sizeMb = [int]$parts[1].Trim() } catch {}
+            $mdf = ""
+            if ($parts.Count -ge 3) { $mdf = $parts[2].Trim() }
+
+            if ($dbName) {
+              $dbs += [PSCustomObject]@{
+                database = $dbName
+                size_mb  = $sizeMb
+                mdf_path = $mdf
+              }
+            }
+          }
+
+          if (@($dbs).Count -eq 0) {
+            Write-DiscoveredResult -Status "ERROR" -ErrorText "No databases found in C:\DataSQL" -Databases @()
+            throw "No databases found in C:\DataSQL"
+          }
+
+          Write-DiscoveredResult -Status "OK" -ErrorText "" -Databases $dbs
+
+          Write-Host "Host: {{ inventory_hostname }}"
+          Write-Host "Computer: $env:COMPUTERNAME"
+          Write-Host "Found databases: $(@($dbs).Count)"
+          foreach ($d in $dbs) {
+            Write-Host "$($d.database) | $($d.size_mb) MB | $($d.mdf_path)"
+          }
+
+          exit 0
+        }
+        catch {
+          try {
+            Write-DiscoveredResult -Status "ERROR" -ErrorText $_.Exception.Message -Databases @()
+          } catch {}
+
+          Write-Host "DISCOVERY ERROR on {{ inventory_hostname }}: $($_.Exception.Message)"
+          exit 1
+        }
+        finally {
+          cmd /c "net use {{ backup_share }} /delete /y >nul 2>&1"
+        }
+      ignore_errors: yes
+      ignore_unreachable: yes
