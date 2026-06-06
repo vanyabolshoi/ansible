@@ -175,9 +175,13 @@
             Remove-Item -Force -ErrorAction SilentlyContinue
 
           # Все служебные файлы FreeFileSync держим в C:\FREE.
+          # Сам .ffs_batch создаём локально и указываем пару папок:
+          # LEFT  = C:\TEMPO       — там в момент копирования только $db.bak
+          # RIGHT = \\172.16.11.226\BackupSQL — корень папки backup на сервере
+          # Режим Update НЕ создаёт подпапку TEMPO на сервере и НЕ удаляет другие backup-файлы.
           $syncFile = "$freeWorkDir\Sync_$db.ffs_batch"
-          $syncTemplate = "$freeWorkDir\SyncTemplate.ffs_batch"
-          $syncUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/SyncSettings.ffs_batch"
+          $ffsLogDir = "$freeWorkDir\Logs"
+          New-Item -ItemType Directory -Path $ffsLogDir -Force | Out-Null
 
           if (Test-Path $backupFile) {
             Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
@@ -188,18 +192,55 @@
             Remove-Item $syncFile -Force -ErrorAction SilentlyContinue
           }
 
-          if (Test-Path $syncTemplate) {
-            Remove-Item $syncTemplate -Force -ErrorAction SilentlyContinue
-          }
+          $syncXml = @"
+<?xml version="1.0" encoding="utf-8"?>
+<FreeFileSync XmlType="BATCH" XmlFormat="23">
+    <Compare>
+        <Variant>TimeAndSize</Variant>
+        <Symlinks>Exclude</Symlinks>
+        <IgnoreTimeShift/>
+    </Compare>
+    <Synchronize>
+        <Variant>Update</Variant>
+        <DetectMovedFiles>false</DetectMovedFiles>
+        <DeletionPolicy>Permanent</DeletionPolicy>
+        <VersioningFolder Style="Replace"/>
+    </Synchronize>
+    <Filter>
+        <Include>
+            <Item>*</Item>
+        </Include>
+        <Exclude>
+            <Item>\System Volume Information\</Item>
+            <Item>\$Recycle.Bin\</Item>
+            <Item>\RECYCLER\</Item>
+            <Item>*\desktop.ini</Item>
+            <Item>*\thumbs.db</Item>
+        </Exclude>
+        <TimeSpan Type="None">0</TimeSpan>
+        <SizeMin Unit="None">0</SizeMin>
+        <SizeMax Unit="None">0</SizeMax>
+    </Filter>
+    <FolderPairs>
+        <Pair>
+            <Left>$backupWorkDir</Left>
+            <Right>{{ backup_share }}</Right>
+        </Pair>
+    </FolderPairs>
+    <Errors Ignore="true" Retry="2" Delay="10"/>
+    <PostSyncCommand Condition="Completion"/>
+    <LogFolder>$ffsLogDir</LogFolder>
+    <EmailNotification Condition="Always"/>
+    <Batch>
+        <ProgressDialog Minimized="true" AutoClose="true"/>
+        <ErrorDialog>Show</ErrorDialog>
+        <PostSyncAction>None</PostSyncAction>
+    </Batch>
+    <LockDirectoriesDuringSync>false</LockDirectoriesDuringSync>
+</FreeFileSync>
+"@
 
-          Invoke-WebRequest -Uri $syncUrl -OutFile $syncTemplate -UseBasicParsing
-
-          if (!(Test-Path $syncTemplate)) {
-            Write-BackupStatus "error" "❌ Ошибка" $db
-            throw "SyncSettings.ffs_batch was not downloaded"
-          }
-
-          Copy-Item $syncTemplate $syncFile -Force
+          $syncXml | Out-File $syncFile -Encoding UTF8 -Force
 
           if (!(Test-Path $syncFile)) {
             Write-BackupStatus "error" "❌ Ошибка" $db
@@ -218,20 +259,20 @@
             throw "Backup file not created: $backupFile"
           }
 
-          # Перед копированием в C:\TEMPO должен быть только .bak.
-          Get-ChildItem $backupWorkDir -File -ErrorAction SilentlyContinue |
+          # Перед копированием в C:\TEMPO должен быть только .bak, без подпапок и служебных файлов.
+          Get-ChildItem $backupWorkDir -Force -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -ne "$db.bak" } |
-            Remove-Item -Force -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
           Write-Host "Waiting for backup file to unlock..."
           Start-Sleep -Seconds 30
 
           Write-BackupStatus "copying" "📤 Копирование" $db
 
-          # Перед запуском копирования ещё раз очищаем C:\TEMPO от всего, кроме текущего backup.
-          Get-ChildItem $backupWorkDir -File -ErrorAction SilentlyContinue |
+          # Перед запуском FreeFileSync ещё раз очищаем C:\TEMPO от всего, кроме текущего backup.
+          Get-ChildItem $backupWorkDir -Force -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -ne "$db.bak" } |
-            Remove-Item -Force -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
           Write-Host "Starting FreeFileSyncPortable: $ffs $syncFile"
           Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -WorkingDirectory $freeWorkDir -Wait -NoNewWindow
