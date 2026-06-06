@@ -51,9 +51,11 @@
         }
 
         $db = $null
+        $tempoDir = "C:\TEMPO"
+        $freeDir = "C:\FREE"
 
         try {
-          net use {{ backup_share }} /delete /y 2>$null
+          cmd /c "net use {{ backup_share }} /delete /y >nul 2>&1"
           net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
 
           if (!(Test-Path "{{ backup_share }}")) {
@@ -61,17 +63,19 @@
             throw "Cannot access backup share: {{ backup_share }}"
           }
 
-          New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
+          New-Item -ItemType Directory -Path $tempoDir -Force | Out-Null
+          New-Item -ItemType Directory -Path $freeDir -Force | Out-Null
 
-          $ffsDir = "C:\TEMPO\FreeFileSyncPortable"
+          # Все служебные файлы храним в C:\FREE, чтобы в C:\TEMPO был только .bak
+          $ffsDir = Join-Path $freeDir "FreeFileSyncPortable"
           $ffs = ""
 
           $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSyncPortable.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
 
           if (!$foundFfs) {
-            Write-Host "FreeFileSyncPortable not found. Deploying..."
+            Write-Host "FreeFileSyncPortable not found. Deploying to C:\FREE..."
 
-            $zip = "C:\TEMPO\FreeFileSyncPortable.zip"
+            $zip = Join-Path $freeDir "FreeFileSyncPortable.zip"
             $zipUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSyncPortable.zip"
 
             if (Test-Path $ffsDir) {
@@ -139,11 +143,17 @@
           Write-Host "Detected database: $db"
           Write-Host "Detected MDF: $mdfPath"
 
-          $backupFile = "C:\TEMPO\$db.bak"
+          $backupFile = Join-Path $tempoDir "$db.bak"
           $remoteBak = "{{ backup_share }}\$db.bak"
 
-          $syncFile = "C:\TEMPO\SyncSettings.ffs_batch"
+          # Уникальный batch-файл на каждую базу, хранится в C:\FREE
+          $syncFile = Join-Path $freeDir "Sync_$db.ffs_batch"
           $syncUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/SyncSettings.ffs_batch"
+
+          # Чистим C:\TEMPO так, чтобы в ней не оставались служебные файлы
+          Get-ChildItem $tempoDir -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -ne $backupFile } |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
           if (Test-Path $backupFile) {
             Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
@@ -173,16 +183,32 @@
             throw "Backup file not created: $backupFile"
           }
 
+          # Перед копированием в C:\TEMPO должен остаться только текущий backup-файл
+          Get-ChildItem $tempoDir -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -ne $backupFile } |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+          Write-Host "Files in C:\TEMPO before copy:"
+          Get-ChildItem $tempoDir -Force | Select-Object Name,Length,LastWriteTime | Format-Table -Auto
+
           Write-Host "Waiting for backup file to unlock..."
           Start-Sleep -Seconds 30
 
           Write-BackupStatus "copying" "📤 Копирование" $db
 
-          Get-Process *FreeFileSync* -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 3
-
           Write-Host "Starting FreeFileSyncPortable: $ffs $syncFile"
           Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -Wait -NoNewWindow
+
+          # Ждём появления готового файла на сервере до 15 минут
+          $timeout = 900
+          $elapsed = 0
+          while ($elapsed -lt $timeout) {
+            if (Test-Path $remoteBak) {
+              break
+            }
+            Start-Sleep -Seconds 5
+            $elapsed += 5
+          }
 
           if (!(Test-Path $remoteBak)) {
             Write-BackupStatus "error" "❌ Ошибка" $db
@@ -278,7 +304,7 @@
           exit 1
         }
         finally {
-          net use {{ backup_share }} /delete /y 2>$null
+          cmd /c "net use {{ backup_share }} /delete /y >nul 2>&1"
         }
       ignore_errors: yes
       ignore_unreachable: yes
