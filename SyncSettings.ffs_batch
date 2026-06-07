@@ -1,44 +1,317 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<FreeFileSync XmlFormat="3" XmlType="BATCH">
-    <MainConfig>
-        <Comparison>
-            <Variant>TimeAndSize</Variant>
-            <Symlinks>Exclude</Symlinks>
-        </Comparison>
-        <SyncConfig>
-            <Variant>Update</Variant>
-            <CustomDirections>
-                <LeftOnly>right</LeftOnly>
-                <RightOnly>left</RightOnly>
-                <LeftNewer>right</LeftNewer>
-                <RightNewer>left</RightNewer>
-                <Different>none</Different>
-                <Conflict>none</Conflict>
-            </CustomDirections>
-            <DetectMovedFiles>false</DetectMovedFiles>
-            <DeletionPolicy>Permanent</DeletionPolicy>
-            <VersioningFolder Style="TimeStamp"/>
-        </SyncConfig>
-        <GlobalFilter>
-            <Include>
-                <Item>*</Item>
-            </Include>
-            <Exclude/>
-            <TimeSpan Type="None">0</TimeSpan>
-            <SizeMin Unit="None">0</SizeMin>
-            <SizeMax Unit="None">0</SizeMax>
-        </GlobalFilter>
-        <FolderPairs>
-            <Pair>
-                <Left>C:\TEMPO</Left>
-                <Right>\\172.16.11.226\BackupSQL</Right>
-            </Pair>
-        </FolderPairs>
-        <OnCompletion/>
-    </MainConfig>
-    <BatchConfig>
-        <HandleError>Ignore</HandleError>
-        <ShowProgress>false</ShowProgress>
-        <LogfileFolder Limit="1"/>
-    </BatchConfig>
-</FreeFileSync>
+---
+- name: SQL Server Backup with FreeFileSyncPortable
+  hosts: all
+  gather_facts: no
+  serial: 20
+  strategy: linear
+  any_errors_fatal: false
+  max_fail_percentage: 100
+  ignore_unreachable: yes
+
+  vars:
+    backup_server: "172.16.11.226"
+    backup_share: "\\\\172.16.11.226\\BackupSQL"
+    backup_user: "172.16.11.226\\Администратор"
+    backup_pass: "Pharmacia_"
+
+  tasks:
+    - name: Create SQL backup and copy with existing FreeFileSync batch
+      ansible.windows.win_shell: |
+        function Write-BackupStatus {
+          param(
+            [string]$Status,
+            [string]$Text,
+            [string]$Database = ""
+          )
+
+          $statusDir = "{{ backup_share }}\_status"
+
+          if (!$Database) {
+            $Database = "unknown_{{ inventory_hostname }}"
+          }
+
+          try {
+            New-Item -ItemType Directory -Path $statusDir -Force | Out-Null
+
+            $statusFile = "$statusDir\$Database.json"
+
+            $s = @{
+              database = $Database
+              computer = $env:COMPUTERNAME
+              host = "{{ inventory_hostname }}"
+              status = $Status
+              text = $Text
+              time = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            }
+
+            $s | ConvertTo-Json -Depth 5 | Out-File $statusFile -Encoding UTF8
+          } catch {
+            Write-Host "Cannot write status file: $($_.Exception.Message)"
+          }
+        }
+
+        $db = $null
+        $tempoDir = "C:\TEMPO"
+        $freeDir = "C:\FREE"
+        $ffsDir = "$freeDir\FreeFileSyncPortable"
+        $syncFile = "$freeDir\SyncSettings.ffs_batch"
+        $syncUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/SyncSettings.ffs_batch"
+        $zip = "$freeDir\FreeFileSyncPortable.zip"
+        $zipUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSyncPortable.zip"
+
+        try {
+          # FreeFileSync используется только для backup — в начале убиваем зависшие процессы
+          Get-Process *FreeFileSync* -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+
+          # Подключаем backup-шару
+          cmd /c "net use {{ backup_share }} /delete /y >nul 2>&1"
+          net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
+
+          if (!(Test-Path "{{ backup_share }}")) {
+            Write-BackupStatus "error" "❌ Ошибка" "unknown_{{ inventory_hostname }}"
+            throw "Cannot access backup share: {{ backup_share }}"
+          }
+
+          # Создаём рабочие каталоги
+          New-Item -ItemType Directory -Path $tempoDir -Force | Out-Null
+          New-Item -ItemType Directory -Path $freeDir -Force | Out-Null
+
+          # TEMPO должен быть чистый — здесь будет только текущий .bak
+          Get-ChildItem $tempoDir -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+          # В FREE чистим только служебные файлы/локи, FreeFileSyncPortable не удаляем каждый раз
+          Remove-Item "$freeDir\*.ffs_batch" -Force -ErrorAction SilentlyContinue
+          Remove-Item "$freeDir\*.ffs_lock" -Force -ErrorAction SilentlyContinue
+          Remove-Item "$freeDir\*.log" -Force -ErrorAction SilentlyContinue
+
+          # Скачиваем готовый SyncSettings.ffs_batch из GitHub
+          Invoke-WebRequest -Uri $syncUrl -OutFile $syncFile -UseBasicParsing
+
+          if (!(Test-Path $syncFile)) {
+            Write-BackupStatus "error" "❌ Ошибка" "unknown_{{ inventory_hostname }}"
+            throw "SyncSettings.ffs_batch was not downloaded"
+          }
+
+          # Проверяем/устанавливаем FreeFileSyncPortable в C:\FREE
+          $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSyncPortable.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+          if (!$foundFfs) {
+            Write-Host "FreeFileSyncPortable not found. Deploying to $freeDir ..."
+
+            if (Test-Path $ffsDir) {
+              Remove-Item $ffsDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+
+            if (Test-Path $zip) {
+              Remove-Item $zip -Force -ErrorAction SilentlyContinue
+            }
+
+            Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing
+
+            if (!(Test-Path $zip)) {
+              Write-BackupStatus "error" "❌ Ошибка" "unknown_{{ inventory_hostname }}"
+              throw "FreeFileSyncPortable.zip was not downloaded"
+            }
+
+            New-Item -ItemType Directory -Path $ffsDir -Force | Out-Null
+            Expand-Archive -Path $zip -DestinationPath $ffsDir -Force
+
+            $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSyncPortable.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+
+          if (!$foundFfs) {
+            Write-BackupStatus "error" "❌ Ошибка" "unknown_{{ inventory_hostname }}"
+            throw "FreeFileSyncPortable.exe not found"
+          }
+
+          $ffs = $foundFfs.FullName
+          Write-Host "FreeFileSyncPortable ready: $ffs"
+          Write-Host "Sync batch ready: $syncFile"
+
+          # Находим SQL instance
+          $sqlService = Get-Service |
+            Where-Object { $_.Name -like "MSSQL$*" } |
+            Select-Object -First 1
+
+          if (!$sqlService) {
+            Write-BackupStatus "error" "❌ Ошибка" "unknown_{{ inventory_hostname }}"
+            throw "SQL Server service not found"
+          }
+
+          $sqlName = $sqlService.Name -replace "MSSQL\$",""
+          $instance = ".\$sqlName"
+
+          # Находим базу из C:\DataSQL
+          $dbInfo = sqlcmd -S "$instance" -h -1 -W -Q "
+          SET NOCOUNT ON;
+          SELECT TOP 1
+            DB_NAME(database_id) + '|' + physical_name
+          FROM sys.master_files
+          WHERE type_desc = 'ROWS'
+            AND DB_NAME(database_id) NOT IN ('master','model','msdb','tempdb')
+            AND physical_name LIKE 'C:\DataSQL%'
+          ORDER BY database_id;
+          "
+
+          $dbInfo = ($dbInfo | Where-Object { $_ -and $_.Trim() -ne "" } | Select-Object -First 1).Trim()
+
+          if (!$dbInfo -or $dbInfo -notlike "*|*") {
+            Write-BackupStatus "error" "❌ Ошибка" "unknown_{{ inventory_hostname }}"
+            throw "Database not found by MDF path in C:\DataSQL"
+          }
+
+          $db = ($dbInfo -split "\|")[0].Trim()
+          $mdfPath = ($dbInfo -split "\|")[1].Trim()
+
+          Write-Host "Detected database: $db"
+          Write-Host "Detected MDF: $mdfPath"
+
+          $backupFile = "$tempoDir\$db.bak"
+          $remoteBak = "{{ backup_share }}\$db.bak"
+
+          # На всякий случай повторно чистим TEMPO перед созданием backup
+          Get-ChildItem $tempoDir -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+          Write-BackupStatus "creating" "🔄 Создание backup" $db
+
+          sqlcmd -S "$instance" -Q "ALTER DATABASE [$db] SET RECOVERY SIMPLE WITH NO_WAIT"
+          sqlcmd -S "$instance" -Q "CHECKPOINT"
+          sqlcmd -S "$instance" -Q "DBCC SHRINKDATABASE ([$db])"
+          sqlcmd -S "$instance" -Q "BACKUP DATABASE [$db] TO DISK = '$backupFile' WITH FORMAT, INIT, COMPRESSION, NAME = 'Full Backup of $db', STATS = 10"
+
+          if (!(Test-Path $backupFile)) {
+            Write-BackupStatus "error" "❌ Ошибка" $db
+            throw "Backup file not created: $backupFile"
+          }
+
+          Write-Host "Waiting for backup file to unlock..."
+          Start-Sleep -Seconds 30
+
+          # Перед копированием в C:\TEMPO должен остаться только текущий backup
+          Get-ChildItem $tempoDir -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -ne $backupFile } |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+          $tempoFiles = @(Get-ChildItem $tempoDir -Force -ErrorAction SilentlyContinue)
+          Write-Host "Files in C:\TEMPO before copy: $($tempoFiles.Count)"
+          foreach ($f in $tempoFiles) { Write-Host "TEMPO: $($f.FullName)" }
+
+          Write-BackupStatus "copying" "📤 Копирование" $db
+
+          # Запускаем готовый SyncSettings.ffs_batch из C:\FREE
+          # В нём уже жёстко прописано: C:\TEMPO -> {{ backup_share }}
+          Write-Host "Starting FreeFileSyncPortable: $ffs $syncFile"
+          Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -Wait -NoNewWindow
+
+          # Ждём появления файла на сервере до 15 минут
+          $timeout = 900
+          $elapsed = 0
+          while ($elapsed -lt $timeout) {
+            if (Test-Path $remoteBak) {
+              break
+            }
+            Start-Sleep -Seconds 5
+            $elapsed += 5
+          }
+
+          if (!(Test-Path $remoteBak)) {
+            Write-BackupStatus "error" "❌ Ошибка" $db
+            throw "Remote backup not found after 15 minutes: $remoteBak"
+          }
+
+          $localSize = (Get-Item $backupFile).Length
+          $remoteSize = (Get-Item $remoteBak).Length
+
+          if ($localSize -ne $remoteSize) {
+            Write-BackupStatus "error" "❌ Ошибка" $db
+            throw "Backup size mismatch. Local=$localSize Remote=$remoteSize"
+          }
+
+          $now = Get-Date
+          (Get-Item $remoteBak).CreationTime = $now
+          (Get-Item $remoteBak).LastWriteTime = $now
+          (Get-Item $remoteBak).LastAccessTime = $now
+
+          $metaDir = "{{ backup_share }}\_meta"
+          New-Item -ItemType Directory -Path $metaDir -Force | Out-Null
+
+          $dbFiles = sqlcmd -S "$instance" -h -1 -W -Q "
+          SET NOCOUNT ON;
+          SELECT physical_name
+          FROM sys.master_files
+          WHERE database_id = DB_ID('$db');
+          "
+
+          $mdfSizeMb = 0
+          $logSizeMb = 0
+
+          foreach ($filePath in $dbFiles) {
+            $filePath = $filePath.Trim()
+            if ($filePath -and (Test-Path $filePath)) {
+              $sizeMb = [math]::Round(((Get-Item $filePath).Length / 1MB), 2)
+
+              if ($filePath.ToLower().EndsWith(".ldf")) {
+                $logSizeMb += $sizeMb
+              } else {
+                $mdfSizeMb += $sizeMb
+              }
+            }
+          }
+
+          $dbSizeMb = [math]::Round(($mdfSizeMb + $logSizeMb), 2)
+          $bakSizeMb = [math]::Round(((Get-Item $remoteBak).Length / 1MB), 2)
+
+          $compression = 0
+          if ($dbSizeMb -gt 0) {
+            $compression = [math]::Round((100 - (($bakSizeMb / $dbSizeMb) * 100)), 1)
+          }
+
+          $meta = @{
+            database     = $db
+            computer     = $env:COMPUTERNAME
+            host         = "{{ inventory_hostname }}"
+            backup_time  = $now.ToString("yyyy-MM-dd HH:mm:ss")
+            mdf_size_mb  = $mdfSizeMb
+            log_size_mb  = $logSizeMb
+            db_size_mb   = $dbSizeMb
+            bak_size_mb  = $bakSizeMb
+            compression  = $compression
+            status       = "OK"
+            copied       = $true
+            copy_method  = "FreeFileSyncPortable"
+          }
+
+          $meta | ConvertTo-Json -Depth 5 | Out-File "$metaDir\$db.json" -Encoding UTF8
+
+          Write-BackupStatus "done" "✅ Завершено" $db
+
+          Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
+          Remove-Item $syncFile -Force -ErrorAction SilentlyContinue
+          Remove-Item "$freeDir\*.ffs_lock" -Force -ErrorAction SilentlyContinue
+
+          Write-Host "Backup created locally: $backupFile"
+          Write-Host "Backup copied to server: $remoteBak"
+          Write-Host "Remote backup verified"
+          Write-Host "Time fixed: $now"
+          Write-Host "Meta created: $metaDir\$db.json"
+
+          exit 0
+        }
+        catch {
+          try {
+            if ($db) {
+              Write-BackupStatus "error" "❌ Ошибка" $db
+            } else {
+              Write-BackupStatus "error" "❌ Ошибка" "unknown_{{ inventory_hostname }}"
+            }
+          } catch {}
+
+          Write-Host "BACKUP ERROR on {{ inventory_hostname }}: $($_.Exception.Message)"
+          exit 1
+        }
+        finally {
+          cmd /c "net use {{ backup_share }} /delete /y >nul 2>&1"
+        }
+      ignore_errors: yes
+      ignore_unreachable: yes
