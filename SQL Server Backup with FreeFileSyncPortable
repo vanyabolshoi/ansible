@@ -15,7 +15,7 @@
     backup_pass: "Pharmacia_"
 
   tasks:
-    - name: Create SQL backup and copy with FreeFileSyncPortable
+    - name: Create SQL backup and copy with GitHub SyncSettings.ffs_batch only
       ansible.windows.win_shell: |
         function Write-BackupStatus {
           param(
@@ -51,15 +51,20 @@
         }
 
         $db = $null
-        $backupFile = $null
-        $remoteBak = $null
-        $syncFile = $null
+        $tempoDir = "C:\TEMPO"
+        $freeDir = "C:\FREE"
+        $ffsDir = "$freeDir\FreeFileSyncPortable"
+        $syncFile = "$freeDir\SyncSettings.ffs_batch"
+        $syncUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/SyncSettings.ffs_batch"
+        $zip = "$freeDir\FreeFileSyncPortable.zip"
+        $zipUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSyncPortable.zip"
 
         try {
-          # FreeFileSync используется только нами — перед стартом убираем зависшие процессы
+          # FreeFileSync используется только для backup — в начале убиваем зависшие процессы
           Get-Process *FreeFileSync* -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 2
 
+          # Подключаем backup-шару
           cmd /c "net use {{ backup_share }} /delete /y >nul 2>&1"
           net use {{ backup_share }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no
 
@@ -68,26 +73,34 @@
             throw "Cannot access backup share: {{ backup_share }}"
           }
 
-          $tempoDir = "C:\TEMPO"
-          $freeDir = "C:\FREE"
-
+          # Создаём рабочие каталоги
           New-Item -ItemType Directory -Path $tempoDir -Force | Out-Null
           New-Item -ItemType Directory -Path $freeDir -Force | Out-Null
 
-          # TEMPO должен быть чистым: тут будет только .bak
-          Get-ChildItem -Path $tempoDir -Force -ErrorAction SilentlyContinue |
-            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          # TEMPO должен быть чистый — здесь будет только текущий .bak
+          if (Test-Path $tempoDir) {
+            Get-ChildItem $tempoDir -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          }
 
-          $ffsDir = "$freeDir\FreeFileSyncPortable"
-          $ffs = ""
+          # В FREE чистим только служебные файлы/локи, FreeFileSyncPortable не удаляем каждый раз
+          Remove-Item "$freeDir\SyncSettings.ffs_batch" -Force -ErrorAction SilentlyContinue
+          Remove-Item "$freeDir\Sync_*.ffs_batch" -Force -ErrorAction SilentlyContinue
+          Get-ChildItem $freeDir -Recurse -Filter "*.ffs_lock" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+          Remove-Item "$freeDir\*.log" -Force -ErrorAction SilentlyContinue
 
+          # Скачиваем готовый SyncSettings.ffs_batch из GitHub. Никакие Sync_$db.ffs_batch не создаём.
+          Invoke-WebRequest -Uri $syncUrl -OutFile $syncFile -UseBasicParsing
+
+          if (!(Test-Path $syncFile)) {
+            Write-BackupStatus "error" "❌ Ошибка" "unknown_{{ inventory_hostname }}"
+            throw "SyncSettings.ffs_batch was not downloaded"
+          }
+
+          # Проверяем/устанавливаем FreeFileSyncPortable в C:\FREE
           $foundFfs = Get-ChildItem $ffsDir -Recurse -Filter "FreeFileSyncPortable.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
 
           if (!$foundFfs) {
-            Write-Host "FreeFileSyncPortable not found. Deploying..."
-
-            $zip = "$freeDir\FreeFileSyncPortable.zip"
-            $zipUrl = "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/FreeFileSyncPortable.zip"
+            Write-Host "FreeFileSyncPortable not found. Deploying to $freeDir ..."
 
             if (Test-Path $ffsDir) {
               Remove-Item $ffsDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -117,13 +130,9 @@
 
           $ffs = $foundFfs.FullName
           Write-Host "FreeFileSyncPortable ready: $ffs"
+          Write-Host "Sync batch ready: $syncFile"
 
-          # Рабочие папки FFS/lock — только в C:\FREE
-          New-Item -ItemType Directory -Path "$freeDir\Data" -Force | Out-Null
-          New-Item -ItemType Directory -Path "$freeDir\Data\Temp" -Force | Out-Null
-          New-Item -ItemType Directory -Path "$freeDir\Data\settings" -Force | Out-Null
-          Remove-Item "$freeDir\sync.ffs_lock" -Force -ErrorAction SilentlyContinue
-
+          # Находим SQL instance
           $sqlService = Get-Service |
             Where-Object { $_.Name -like "MSSQL$*" } |
             Select-Object -First 1
@@ -136,6 +145,7 @@
           $sqlName = $sqlService.Name -replace "MSSQL\$",""
           $instance = ".\$sqlName"
 
+          # Находим базу из C:\DataSQL
           $dbInfo = sqlcmd -S "$instance" -h -1 -W -Q "
           SET NOCOUNT ON;
           SELECT TOP 1
@@ -162,12 +172,11 @@
 
           $backupFile = "$tempoDir\$db.bak"
           $remoteBak = "{{ backup_share }}\$db.bak"
-          $syncFile = "$freeDir\Sync_$db.ffs_batch"
 
-          Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
-          Remove-Item $syncFile -Force -ErrorAction SilentlyContinue
-          Remove-Item "$freeDir\sync.ffs_lock" -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 2
+          # На всякий случай повторно чистим TEMPO перед созданием backup
+          if (Test-Path $tempoDir) {
+            Get-ChildItem $tempoDir -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          }
 
           Write-BackupStatus "creating" "🔄 Создание backup" $db
 
@@ -181,73 +190,25 @@
             throw "Backup file not created: $backupFile"
           }
 
-          # Перед копированием в C:\TEMPO должен остаться только текущий .bak
-          Get-ChildItem -Path $tempoDir -Force -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -ne $backupFile } |
-            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-
           Write-Host "Waiting for backup file to unlock..."
           Start-Sleep -Seconds 30
 
+          # Перед копированием в C:\TEMPO должен остаться только текущий backup
+          Get-ChildItem $tempoDir -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -ne $backupFile } |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+          $tempoFiles = @(Get-ChildItem $tempoDir -Force -ErrorAction SilentlyContinue)
+          Write-Host "Files in C:\TEMPO before copy: $($tempoFiles.Count)"
+          foreach ($f in $tempoFiles) { Write-Host "TEMPO: $($f.FullName)" }
+
           Write-BackupStatus "copying" "📤 Копирование" $db
 
-          # ВАЖНО: XML находится внутри PowerShell here-string, поэтому YAML не ломается.
-          # FFS копирует именно один файл C:\TEMPO\DB.bak в корень \\server\BackupSQL\DB.bak.
-          $syncXml = @'
-        <?xml version="1.0" encoding="utf-8"?>
-        <FreeFileSync XmlType="BATCH" XmlFormat="23">
-            <Notes />
-            <Compare>
-                <Variant>TimeAndSize</Variant>
-                <Symlinks>Exclude</Symlinks>
-                <IgnoreTimeShift />
-            </Compare>
-            <Synchronize>
-                <Variant>Update</Variant>
-                <DetectMovedFiles>false</DetectMovedFiles>
-                <DeletionPolicy>None</DeletionPolicy>
-                <VersioningFolder Style="Replace" />
-            </Synchronize>
-            <Filter>
-                <Include>
-                    <Item>*</Item>
-                </Include>
-                <Exclude />
-                <TimeSpan Type="None">0</TimeSpan>
-                <SizeMin Unit="None">0</SizeMin>
-                <SizeMax Unit="None">0</SizeMax>
-            </Filter>
-            <FolderPairs>
-                <Pair>
-                    <Left>__SOURCE_FILE__</Left>
-                    <Right>__DEST_FILE__</Right>
-                </Pair>
-            </FolderPairs>
-            <Errors Ignore="false" Retry="1" Delay="5" />
-            <PostSyncCommand Condition="Completion" />
-            <LogFolder Limit="0">C:\FREE\Logs</LogFolder>
-            <EmailNotification Condition="Always" />
-            <Batch>
-                <ProgressDialog Minimized="true" AutoClose="true" />
-                <ErrorDialog>Show</ErrorDialog>
-                <PostSyncAction>None</PostSyncAction>
-            </Batch>
-        </FreeFileSync>
-        '@
-
-          $syncXml = $syncXml.Replace('__SOURCE_FILE__', $backupFile)
-          $syncXml = $syncXml.Replace('__DEST_FILE__', $remoteBak)
-          $syncXml | Set-Content -Path $syncFile -Encoding UTF8
-
-          if (!(Test-Path $syncFile)) {
-            Write-BackupStatus "error" "❌ Ошибка" $db
-            throw "Sync file was not created: $syncFile"
-          }
-
+          # Запускаем только готовый SyncSettings.ffs_batch из C:\FREE
           Write-Host "Starting FreeFileSyncPortable: $ffs $syncFile"
-          Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -Wait -NoNewWindow -WorkingDirectory $freeDir
+          Start-Process -FilePath $ffs -ArgumentList "`"$syncFile`"" -Wait -NoNewWindow
 
-          # Ждём появления готового файла на сервере до 15 минут
+          # Ждём появления файла на сервере до 15 минут
           $timeout = 900
           $elapsed = 0
           while ($elapsed -lt $timeout) {
@@ -331,7 +292,7 @@
 
           Remove-Item $backupFile -Force -ErrorAction SilentlyContinue
           Remove-Item $syncFile -Force -ErrorAction SilentlyContinue
-          Remove-Item "$freeDir\sync.ffs_lock" -Force -ErrorAction SilentlyContinue
+          Get-ChildItem $freeDir -Recurse -Filter "*.ffs_lock" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 
           Write-Host "Backup created locally: $backupFile"
           Write-Host "Backup copied to server: $remoteBak"
