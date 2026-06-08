@@ -11,103 +11,143 @@
         path: "{{ output_dir }}"
         state: directory
 
-    - name: Run email extraction script
+    - name: Create email extraction script on remote host
+      ansible.windows.win_copy:
+        dest: C:\Windows\Temp\get_pharmacy_emails.ps1
+        content: |
+          param([string]$OutputDir = "{{ output_dir }}")
+          $ComputerName = $env:COMPUTERNAME
+
+          function Get-ThunderbirdEmailsForUser([string]$UserDir) {
+              $result = @()
+              $tbDir = Join-Path $UserDir "AppData\Roaming\Thunderbird"
+              $profilesIni = Join-Path $tbDir "profiles.ini"
+              if (-not (Test-Path $profilesIni)) { return $result }
+              Get-Content $profilesIni | ForEach-Object {
+                  if ($_ -match '^Path=(.+)$') { return }
+              }
+              Get-Content $profilesIni | ForEach-Object {
+                  if ($_ -match '^Path=(.+)$') {
+                      $relPath = $Matches[1]
+                      $profileDir = Join-Path $tbDir $relPath
+                      $prefsJs = Join-Path $profileDir "prefs.js"
+                      if (-not (Test-Path $prefsJs)) { return }
+                      Get-Content $prefsJs | ForEach-Object {
+                          if ($_ -match 'mail\.identity\.\d+\.useremail') {
+                              $parts = $_ -split '"'
+                              if ($parts.Count -ge 4) {
+                                  $email = $parts[3]
+                                  if ($email -match '@') { $result += $email }
+                              }
+                          }
+                      }
+                  }
+              }
+              return $result
+          }
+
+          function Get-LiveMailEmailsForUser([string]$UserDir) {
+              $result = @()
+              $regFile = Join-Path $UserDir "NTUSER.DAT"
+              if (-not (Test-Path $regFile)) { return $result }
+              $localAppData = Join-Path $UserDir "AppData\Local"
+              $wlDir = Join-Path $localAppData "Windows Live Mail"
+              if (Test-Path $wlDir) {
+                  Get-ChildItem "$wlDir\*.windows-live-mail\*.account" -ErrorAction SilentlyContinue | ForEach-Object {
+                      $content = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
+                      if ($content -and $content -match 'EmailAddress\s*=\s*"([^"]+)"') { $result += $Matches[1] }
+                  }
+              }
+              return $result
+          }
+
+          function Get-OutlookEmailsForUser([string]$UserDir) {
+              $result = @()
+              $localAppData = Join-Path $UserDir "AppData\Local"
+              $roamAppData = Join-Path $UserDir "AppData\Roaming"
+              $outlookPaths = @(
+                  (Join-Path $localAppData "Microsoft\Outlook"),
+                  (Join-Path $roamAppData "Microsoft\Outlook")
+              )
+              foreach ($p in $outlookPaths) {
+                  if (Test-Path $p) {
+                      Get-ChildItem "$p\*.xml" -ErrorAction SilentlyContinue | ForEach-Object {
+                          $xml = [xml](Get-Content $_.FullName -ErrorAction SilentlyContinue)
+                          if ($xml) {
+                              $xml.SelectNodes("//*[local-name()='email' or local-name()='Email' or local-name()='EmailAddress']") | ForEach-Object {
+                                  if ($_.'#text' -match '@') { $result += $_.'#text' }
+                              }
+                          }
+                      }
+                  }
+              }
+              return $result
+          }
+
+          function Get-IPAddress {
+              try {
+                  $ip = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Ethernet*","Wi-Fi*" -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -ne "127.0.0.1" } | Select-Object -First 1).IPAddress
+                  if ($ip) { return $ip }
+              } catch {}
+              return "0.0.0.0"
+          }
+
+          $allEmails = @()
+          $tbEmails = @()
+          $wlEmails = @()
+          $olEmails = @()
+
+          $userDirs = Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin @("Public", "Default", "Default User", "All Users", "admin") }
+          foreach ($userDir in $userDirs) {
+              $tb = Get-ThunderbirdEmailsForUser $userDir.FullName
+              $wl = Get-LiveMailEmailsForUser $userDir.FullName
+              $ol = Get-OutlookEmailsForUser $userDir.FullName
+              $tbEmails += $tb
+              $wlEmails += $wl
+              $olEmails += $ol
+              $allEmails += $tb + $wl + $ol
+          }
+
+          $ip = Get-IPAddress
+          $allEmails = $allEmails | Select-Object -Unique
+          $tbEmails = $tbEmails | Select-Object -Unique
+          $wlEmails = $wlEmails | Select-Object -Unique
+          $olEmails = $olEmails | Select-Object -Unique
+
+          $result = @{
+              time = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+              computer = $ComputerName
+              host = $ip
+              thunderbird = @($tbEmails)
+              live_mail = @($wlEmails)
+              outlook = @($olEmails)
+              emails = @($allEmails)
+          }
+
+          if (-not (Test-Path $OutputDir)) { New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null }
+          $outputFile = Join-Path $OutputDir "$ComputerName.json"
+          $result | ConvertTo-Json -Compress | Set-Content $outputFile -Encoding UTF8
+          Write-Output ($result | ConvertTo-Json -Compress)
+
+    - name: Run email scan as SYSTEM via scheduled task
       ansible.windows.win_shell: |
-        param(
-            [string]$OutputDir = "{{ output_dir }}",
-            [string]$ComputerName = $env:COMPUTERNAME
-        )
-        function Get-ThunderbirdEmails {
-            $result = @()
-            $appdata = [Environment]::GetFolderPath("ApplicationData")
-            $tbDir = Join-Path $appdata "Thunderbird"
-            $profilesIni = Join-Path $tbDir "profiles.ini"
-            if (-not (Test-Path $profilesIni)) { return $result }
-            $profilePaths = @()
-            Get-Content $profilesIni | ForEach-Object {
-                if ($_ -match '^Path=(.+)$') { $profilePaths += $Matches[1] }
-            }
-            foreach ($relPath in $profilePaths) {
-                $profileDir = Join-Path $tbDir $relPath
-                $prefsJs = Join-Path $profileDir "prefs.js"
-                if (-not (Test-Path $prefsJs)) { continue }
-                $lines = Get-Content $prefsJs
-                foreach ($line in $lines) {
-                    if ($line -match 'mail\.identity\.\d+\.useremail') {
-                        $parts = $line -split '"'
-                        if ($parts.Count -ge 4) {
-                            $email = $parts[3]
-                            if ($email -match '@') { $result += $email }
-                        }
-                    }
-                }
-            }
-            return ($result | Select-Object -Unique)
+        $taskName = "TempEmailScan_$(Get-Random)"
+        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File C:\Windows\Temp\get_pharmacy_emails.ps1"
+        $principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+        Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force
+        Start-ScheduledTask -TaskName $taskName
+        do {
+          Start-Sleep -Seconds 2
+          $t = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+          $state = if ($t) { $t.State } else { 0 }
+        } while ($state -eq 4)
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+        if (Test-Path "{{ output_dir }}\$env:COMPUTERNAME.json") {
+          Get-Content "{{ output_dir }}\$env:COMPUTERNAME.json" -Raw
+        } else {
+          Write-Output '{"error": "Output file not found"}'
         }
-        function Get-LiveMailEmails {
-            $result = @()
-            $regPath = "HKCU:\Software\Microsoft\Windows Live Mail\Accounts"
-            if (Test-Path $regPath) {
-                Get-ChildItem $regPath -ErrorAction SilentlyContinue | ForEach-Object {
-                    $props = Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue
-                    if ($props.EmailAddress) { $result += $props.EmailAddress }
-                }
-            }
-            $localAppData = [Environment]::GetFolderPath("LocalApplicationData")
-            $wlDir = Join-Path $localAppData "Windows Live Mail"
-            if (Test-Path $wlDir) {
-                Get-ChildItem "$wlDir\*.windows-live-mail\*.account" -ErrorAction SilentlyContinue | ForEach-Object {
-                    $content = Get-Content $_.FullName -Raw
-                    if ($content -match 'EmailAddress\s*=\s*"([^"]+)"') { $result += $Matches[1] }
-                }
-            }
-            return ($result | Select-Object -Unique)
-        }
-        function Get-OutlookEmails {
-            $result = @()
-            $regPaths = @(
-                "HKCU:\Software\Microsoft\Office\16.0\Outlook\Profiles",
-                "HKCU:\Software\Microsoft\Office\15.0\Outlook\Profiles",
-                "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows Messaging Subsystem\Profiles"
-            )
-            foreach ($rp in $regPaths) {
-                if (Test-Path $rp) {
-                    Get-ChildItem $rp -ErrorAction SilentlyContinue | ForEach-Object {
-                        $profileName = $_.PSChildName
-                        Get-ChildItem "$rp\$profileName\*" -ErrorAction SilentlyContinue | ForEach-Object {
-                            $props = Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue
-                            if ($props.Email) { $result += $props.Email }
-                        }
-                    }
-                }
-            }
-            return ($result | Select-Object -Unique)
-        }
-        function Get-IPAddress {
-            try {
-                $ip = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Ethernet*","Wi-Fi*" -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -ne "127.0.0.1" } | Select-Object -First 1).IPAddress
-                if ($ip) { return $ip }
-            } catch {}
-            return "0.0.0.0"
-        }
-        $ip = Get-IPAddress
-        $tbEmails = Get-ThunderbirdEmails
-        $wlEmails = Get-LiveMailEmails
-        $olEmails = Get-OutlookEmails
-        $allEmails = @($tbEmails + $wlEmails + $olEmails) | Select-Object -Unique
-        $result = @{
-            time = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-            computer = $ComputerName
-            host = $ip
-            thunderbird = @($tbEmails)
-            live_mail = @($wlEmails)
-            outlook = @($olEmails)
-            emails = @($allEmails)
-        }
-        if (-not (Test-Path $OutputDir)) { New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null }
-        $outputFile = Join-Path $OutputDir "$ComputerName.json"
-        $result | ConvertTo-Json -Compress | Set-Content $outputFile -Encoding UTF8
-        Write-Output ($result | ConvertTo-Json -Compress)
       register: script_output
 
     - name: Show result
