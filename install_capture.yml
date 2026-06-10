@@ -1,0 +1,88 @@
+---
+- name: Install Capture Agent on pharmacy servers
+  hosts: all
+  gather_facts: no
+  vars:
+    capture_secret: "Until1987"
+    capture_port: 59232
+    capture_dir: "C:\\Program Files\\Capture"
+    release_url: "https://github.com/bluewave-labs/capture/releases/download/v1.4.0"
+    zip_name: "capture_1.4.0_windows_amd64.zip"
+
+  tasks:
+    - name: Check if capture is already installed
+      ansible.windows.win_stat:
+        path: "{{ capture_dir }}\\capture.exe"
+      register: capture_bin
+
+    - name: Create install directory
+      ansible.windows.win_file:
+        path: "{{ capture_dir }}"
+        state: directory
+      when: not capture_bin.stat.exists
+
+    - name: Download capture zip
+      ansible.windows.win_get_url:
+        url: "{{ release_url }}/{{ zip_name }}"
+        dest: "{{ capture_dir }}\\capture.zip"
+        timeout: 120
+      when: not capture_bin.stat.exists
+      register: dl
+
+    - name: Extract capture zip
+      community.windows.win_unzip:
+        src: "{{ capture_dir }}\\capture.zip"
+        dest: "{{ capture_dir }}"
+        delete_archive: yes
+      when: not capture_bin.stat.exists
+      register: extracted
+
+    - name: Stop existing capture service if running
+      ansible.windows.win_service:
+        name: capture
+        state: stopped
+      ignore_errors: yes
+
+    - name: Remove old capture service if exists
+      ansible.windows.win_shell: |
+        sc.exe delete capture
+      ignore_errors: yes
+      when: capture_bin.stat.exists
+
+    - name: Create capture service
+      ansible.windows.win_shell: |
+        New-Service -Name "capture" `
+          -BinaryPathName "`"{{ capture_dir }}\capture.exe`" serve --port {{ capture_port }} --secret {{ capture_secret }}" `
+          -DisplayName "Capture Agent" `
+          -StartupType Automatic
+      when: not capture_bin.stat.exists
+
+    - name: Start capture service
+      ansible.windows.win_service:
+        name: capture
+        start_mode: auto
+        state: started
+
+    - name: Open firewall port
+      ansible.windows.win_shell: |
+        New-NetFirewallRule -DisplayName "Capture Agent Port {{ capture_port }}" `
+          -Direction Inbound -Protocol TCP -LocalPort {{ capture_port }} -Action Allow -ErrorAction SilentlyContinue
+      ignore_errors: yes
+
+    - name: Wait for capture to respond
+      ansible.windows.win_uri:
+        url: "http://localhost:{{ capture_port }}/api/v1/metrics"
+        method: GET
+        status_code: 200
+      register: health
+      retries: 5
+      delay: 2
+      until: health.status == 200
+      ignore_errors: yes
+
+    - name: Report status
+      debug:
+        msg:
+          - "Capture Agent installed: {{ not capture_bin.stat.exists }}"
+          - "Service running: {{ health.status == 200 if health is defined else 'unknown' }}"
+          - "URL: http://{{ ansible_host }}:{{ capture_port }}/api/v1/metrics"
