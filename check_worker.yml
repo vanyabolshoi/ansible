@@ -1,0 +1,23 @@
+---
+- name: Check worker
+  hosts: all
+  gather_facts: no
+  tasks:
+    - ansible.windows.win_shell: |
+        Write-Host "=== PS processes ==="
+        Get-WmiObject Win32_Process | Where-Object { $_.Name -eq "powershell.exe" -and $_.CommandLine -like "*capture_agent*" } | ForEach-Object { Write-Host ("PS: " + $_.ProcessId + " " + $_.CommandLine.substring(0, [Math]::Min(150, $_.CommandLine.Length))) }
+        Write-Host "=== task state ==="
+        $t = Get-ScheduledTask -TaskName "CaptureAgent" -ErrorAction SilentlyContinue
+        if ($t) { Write-Host ("State: " + $t.State) }
+        $r = $t | Get-ScheduledTaskInfo
+        if ($r) { Write-Host ("LastRun: " + $r.LastRunTime + " Result: " + $r.LastTaskResult) }
+        Write-Host "=== test local ==="
+        try {
+          $wc = New-Object System.Net.WebClient
+          $result = $wc.DownloadString("http://localhost:59232/health")
+          Write-Host ("Response: " + $result)
+        } catch { Write-Host ("Error: " + $_.Exception.Message) }
+        exit 0
+      register: r
+    - debug:
+        var: r.stdout_lines
