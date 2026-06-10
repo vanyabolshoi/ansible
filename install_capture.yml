@@ -5,7 +5,7 @@
   vars:
     secret: "Until1987"
     port: 59232
-    dir: "C:\Program Files\Capture"
+    dir: "C:\\Program Files\\Capture"
   tasks:
     - name: Install capture via PowerShell
       ansible.windows.win_shell: |
@@ -19,7 +19,6 @@
 
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
 
-        # Stop and remove existing service
         if (Get-Service -Name capture -ErrorAction SilentlyContinue) {
           Stop-Service -Name capture -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 2
@@ -27,33 +26,27 @@
           Start-Sleep -Seconds 2
         }
 
-        # Download
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Write-Host "Downloading capture..."
+        Write-Host "Downloading..."
         Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -TimeoutSec 120 -UseBasicParsing
 
-        # Extract
         Write-Host "Extracting..."
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $dir)
         Remove-Item $zipPath -Force
 
-        # Create service
         Write-Host "Creating service..."
         $binPath = "`"$exePath`" serve --port $port --secret $secret"
         New-Service -Name capture -BinaryPathName $binPath -DisplayName "Capture Agent" -StartupType Automatic
 
-        # Start service
         Write-Host "Starting service..."
         Start-Service -Name capture -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 3
 
-        # Firewall
         New-NetFirewallRule -DisplayName "Capture-Port-$port" -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -ErrorAction SilentlyContinue
 
-        # Verify
         $svc = Get-Service -Name capture -ErrorAction SilentlyContinue
-        Write-Host "Service state: $($svc.Status)"
+        Write-Host "Service: $($svc.Status)"
 
         try {
           $r = Invoke-WebRequest -Uri "http://localhost:$port/api/v1/metrics" -TimeoutSec 5 -UseBasicParsing
@@ -61,7 +54,6 @@
         } catch {
           Write-Host "API: FAIL ($_)"
         }
-      register: result
 
     - name: Show result
       debug:
