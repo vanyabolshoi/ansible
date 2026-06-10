@@ -15,74 +15,71 @@
         path: "{{ capture_dir }}\\capture.exe"
       register: capture_bin
 
-    - name: Create install directory
-      ansible.windows.win_file:
-        path: "{{ capture_dir }}"
-        state: directory
-      when: not capture_bin.stat.exists
-
-    - name: Download capture zip
-      ansible.windows.win_get_url:
-        url: "{{ release_url }}/{{ zip_name }}"
-        dest: "{{ capture_dir }}\\capture.zip"
-        timeout: 120
-      when: not capture_bin.stat.exists
-      register: dl
-
-    - name: Extract capture zip
-      community.windows.win_unzip:
-        src: "{{ capture_dir }}\\capture.zip"
-        dest: "{{ capture_dir }}"
-        delete_archive: yes
-      when: not capture_bin.stat.exists
-      register: extracted
-
-    - name: Stop existing capture service if running
-      ansible.windows.win_service:
-        name: capture
-        state: stopped
-      ignore_errors: yes
-
-    - name: Remove old capture service if exists
+    - name: Download and install capture agent
       ansible.windows.win_shell: |
-        sc.exe delete capture
-      ignore_errors: yes
-      when: capture_bin.stat.exists
+        $dir = "{{ capture_dir }}"
+        $zipUrl = "{{ release_url }}/{{ zip_name }}"
+        $zipPath = "$dir\capture.zip"
+        $port = {{ capture_port }}
+        $secret = "{{ capture_secret }}"
 
-    - name: Create capture service
-      ansible.windows.win_shell: |
-        New-Service -Name "capture" `
-          -BinaryPathName "`"{{ capture_dir }}\capture.exe`" serve --port {{ capture_port }} --secret {{ capture_secret }}" `
-          -DisplayName "Capture Agent" `
-          -StartupType Automatic
+        # Create directory
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+
+        # Download
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Write-Host "Downloading from $zipUrl..."
+        try {
+          Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -TimeoutSec 120
+        } catch {
+          Write-Warning "Download failed: $_"
+          exit 1
+        }
+
+        # Extract
+        Write-Host "Extracting..."
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $dir)
+
+        # Remove old service
+        sc.exe delete capture 2>$null
+
+        # Create service
+        $binPath = "`"$dir\capture.exe`" serve --port $port --secret $secret"
+        New-Service -Name "capture" -BinaryPathName $binPath -DisplayName "Capture Agent" -StartupType Automatic
+
+        # Start
+        Start-Service -Name capture
+
+        # Firewall
+        New-NetFirewallRule -DisplayName "Capture Agent Port $port" -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -ErrorAction SilentlyContinue
+
+        Write-Host "Capture Agent installed successfully"
       when: not capture_bin.stat.exists
+      register: install_result
 
-    - name: Start capture service
+    - name: Verify capture service
       ansible.windows.win_service:
         name: capture
         start_mode: auto
         state: started
-
-    - name: Open firewall port
-      ansible.windows.win_shell: |
-        New-NetFirewallRule -DisplayName "Capture Agent Port {{ capture_port }}" `
-          -Direction Inbound -Protocol TCP -LocalPort {{ capture_port }} -Action Allow -ErrorAction SilentlyContinue
       ignore_errors: yes
+      register: svc
 
-    - name: Wait for capture to respond
+    - name: Check API health
       ansible.windows.win_uri:
         url: "http://localhost:{{ capture_port }}/api/v1/metrics"
         method: GET
         status_code: 200
       register: health
-      retries: 5
-      delay: 2
+      retries: 10
+      delay: 3
       until: health.status == 200
       ignore_errors: yes
 
-    - name: Report status
+    - name: Final status
       debug:
         msg:
-          - "Capture Agent installed: {{ not capture_bin.stat.exists }}"
-          - "Service running: {{ health.status == 200 if health is defined else 'unknown' }}"
-          - "URL: http://{{ ansible_host }}:{{ capture_port }}/api/v1/metrics"
+          - "{{ 'INSTALLED' if (not capture_bin.stat.exists) else 'ALREADY_INSTALLED' }}"
+          - "Service state: {{ svc.state | default('unknown') }}"
+          - "API health: {{ 'OK' if health.status == 200 else 'FAIL' }}"
