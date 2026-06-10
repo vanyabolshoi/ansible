@@ -1,0 +1,61 @@
+---
+- name: Diagnose Capture Agent
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Run diagnostics
+      ansible.windows.win_shell: |
+        Write-Host "=== Capture.exe check ==="
+        if (Test-Path "C:\Program Files\Capture\capture.exe") {
+          $f = Get-Item "C:\Program Files\Capture\capture.exe"
+          Write-Host "Exists: True Size: $($f.Length) bytes"
+        } else {
+          Write-Host "Exists: False"
+        }
+
+        Write-Host "=== Directory listing ==="
+        Get-ChildItem "C:\Program Files\Capture" -ErrorAction SilentlyContinue | ForEach-Object {
+          Write-Host "$($_.Name) ($($_.Length) bytes)"
+        }
+
+        Write-Host "=== Service check ==="
+        $svc = Get-Service -Name capture -ErrorAction SilentlyContinue
+        if ($svc) {
+          Write-Host "Service: $($svc.Name) Status: $($svc.Status) StartType: $($svc.StartType)"
+        } else {
+          Write-Host "Service: Not found"
+        }
+
+        Write-Host "=== Event log (last 5 capture errors) ==="
+        Get-WinEvent -LogName Application -MaxEvents 5 -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -like "*capture*" } | ForEach-Object {
+          Write-Host "$($_.TimeCreated): $($_.Message)"
+        }
+
+        Write-Host "=== Port check ==="
+        netstat -ano | Select-String "59232" | ForEach-Object { Write-Host $_ }
+
+        Write-Host "=== Firewall rule ==="
+        netsh advfirewall firewall show rule name="Capture-Port-59232" | Select-String "Rule Name|Enabled|LocalPort"
+
+        Write-Host "=== Try run capture directly ==="
+        try {
+          $p = Start-Process -FilePath "C:\Program Files\Capture\capture.exe" -ArgumentList "serve --port 59232 --secret Until1987" -NoNewWindow -RedirectStandardOutput "$env:TEMP\capture_test.log" -RedirectStandardError "$env:TEMP\capture_test.err" -PassThru
+          Start-Sleep 3
+          Write-Host "Process: $($p.Id) Exited: $($p.HasExited)"
+          if ($p.HasExited) {
+            Write-Host "Exit code: $($p.ExitCode)"
+            Write-Host "STDOUT:"
+            Get-Content "$env:TEMP\capture_test.log" -ErrorAction SilentlyContinue
+            Write-Host "STDERR:"
+            Get-Content "$env:TEMP\capture_test.err" -ErrorAction SilentlyContinue
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+        } catch {
+          Write-Host "Run failed: $_"
+        }
+
+      register: result
+
+    - name: Show output
+      debug:
+        var: result.stdout_lines
