@@ -1,0 +1,24 @@
+---
+- name: Run capture directly
+  hosts: all
+  gather_facts: no
+  tasks:
+    - ansible.windows.win_shell: |
+        $job = Start-Job -InitializationScript { $env:API_SECRET="Until1987"; $env:PORT="59232"; $env:GIN_MODE="release" } -ScriptBlock { & "C:\capture\capture.exe" }
+        Start-Sleep 8
+        $state = $job.State
+        if ($state -eq "Running") {
+          Write-Host "RUNNING"
+          $n = netstat -ano | Select-String ":59232"
+          if ($n) { Write-Host "PORT: yes" } else { Write-Host "PORT: no" }
+          Stop-Job $job -ErrorAction SilentlyContinue
+        } else {
+          Write-Host ($state)
+          $out = Receive-Job $job -ErrorAction SilentlyContinue
+          Write-Host ($out -join " | ")
+        }
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
+        exit 0
+      register: r
+    - debug:
+        var: r.stdout_lines
