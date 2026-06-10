@@ -9,52 +9,38 @@
   tasks:
     - name: Install capture via PowerShell
       ansible.windows.win_shell: |
-        $ErrorActionPreference = 'Stop'
         $dir = "{{ dir }}"
         $port = {{ port }}
         $secret = "{{ secret }}"
         $zipUrl = "https://github.com/bluewave-labs/capture/releases/download/v1.4.0/capture_1.4.0_windows_amd64.zip"
         $zipPath = "$dir\capture.zip"
         $exePath = "$dir\capture.exe"
-
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
-
         if (Get-Service -Name capture -ErrorAction SilentlyContinue) {
           Stop-Service -Name capture -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 2
+          Start-Sleep 2
           sc.exe delete capture
-          Start-Sleep -Seconds 2
+          Start-Sleep 2
         }
-
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Write-Host "Downloading..."
         Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -TimeoutSec 120 -UseBasicParsing
-
         Write-Host "Extracting..."
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $dir)
         Remove-Item $zipPath -Force
-
         Write-Host "Creating service..."
-        $binPath = "`"$exePath`" serve --port $port --secret $secret"
-        New-Service -Name capture -BinaryPathName $binPath -DisplayName "Capture Agent" -StartupType Automatic
-
-        Write-Host "Starting service..."
-        Start-Service -Name capture -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 3
-
+        sc.exe create capture binPath="`"$exePath`" serve --port $port --secret $secret" start=auto DisplayName="Capture Agent"
+        Write-Host "Starting..."
+        Start-Service -Name capture
         New-NetFirewallRule -DisplayName "Capture-Port-$port" -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -ErrorAction SilentlyContinue
-
-        $svc = Get-Service -Name capture -ErrorAction SilentlyContinue
+        $svc = Get-Service -Name capture
         Write-Host "Service: $($svc.Status)"
-
         try {
           $r = Invoke-WebRequest -Uri "http://localhost:$port/api/v1/metrics" -TimeoutSec 5 -UseBasicParsing
           Write-Host "API: OK ($($r.StatusCode))"
-        } catch {
-          Write-Host "API: FAIL ($_)"
-        }
+        } catch { Write-Host "API: FAIL ($_)" }
 
-    - name: Show result
+    - name: Show stdout
       debug:
         var: result.stdout_lines
