@@ -3,19 +3,13 @@
   hosts: all
   gather_facts: no
   tasks:
-    - name: Clean old service
+    - name: Clean old
       ansible.windows.win_shell: |
         $s = Get-Service -Name capture -ErrorAction SilentlyContinue
         if ($s) { sc.exe stop capture 2>$null; Start-Sleep 2; sc.exe delete capture 2>$null; Start-Sleep 2 }
+        Remove-Item "C:\capture" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item "C:\Program Files\Capture" -Recurse -Force -ErrorAction SilentlyContinue
         exit 0
-
-    - name: Clean old files
-      ansible.windows.win_file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - C:\capture
-        - C:\Program Files\Capture
 
     - name: Create dir
       ansible.windows.win_file:
@@ -34,16 +28,23 @@
         Remove-Item "C:\capture\capture.zip" -Force
         exit 0
 
-    - name: Create service
+    - name: Write wrapper
       ansible.windows.win_shell: |
-        $exe = "C:\capture\capture.exe"
-        if (-not (Test-Path $exe)) { throw "capture.exe not found" }
-        New-Service -Name capture -BinaryPathName $exe -DisplayName "Capture Monitoring Agent" -Description "Capture hardware monitoring agent" -StartupType Automatic
-        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\capture" -Name "Environment" -Value @("API_SECRET=Until1987", "PORT=59232", "GIN_MODE=release") -Type MultiString
-        Write-Host "service created"
+        @"
+        @echo off
+        set API_SECRET=Until1987
+        set PORT=59232
+        set GIN_MODE=release
+        C:\capture\capture.exe
+        "@ | Set-Content -Path "C:\capture\run.cmd" -Encoding ASCII
         exit 0
 
-    - name: Add firewall rule
+    - name: Create service with wrapper
+      ansible.windows.win_shell: |
+        New-Service -Name capture -BinaryPathName "cmd.exe" -ArgumentList "/c C:\capture\run.cmd" -DisplayName "Capture Agent" -StartupType Automatic
+        exit 0
+
+    - name: Firewall rule
       ansible.windows.win_shell: |
         netsh advfirewall firewall add rule name="Capture-Port-59232" dir=in action=allow protocol=TCP localport=59232
         exit 0
@@ -53,9 +54,12 @@
         Start-Service -Name capture
         Start-Sleep 5
         $s = Get-Service -Name capture
-        Write-Host ("status: " + $s.Status)
+        Write-Host ("service: " + $s.Status)
         $p = Get-Process -Name capture -ErrorAction SilentlyContinue
-        if ($p) { Write-Host ("pid: " + $p.Id) } else { Write-Host "pid: none" }
+        if ($p) { Write-Host ("proc: " + $p.Id) } else {
+          $p2 = Get-Process -Name cmd -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*capture*" }
+          if ($p2) { Write-Host ("cmd: " + $p2.Id) } else { Write-Host "proc: none" }
+        }
         $n = netstat -ano | Select-String ":59232"
         if ($n) { Write-Host "port: yes" } else { Write-Host "port: no" }
         exit 0
