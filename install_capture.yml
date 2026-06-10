@@ -3,32 +3,45 @@
   hosts: all
   gather_facts: no
   tasks:
-    - name: Copy capture zip from controller
+    - name: Clean old
+      ansible.windows.win_shell: |
+        $s = Get-Service -Name capture -ErrorAction SilentlyContinue
+        if ($s) { Stop-Service -Name capture -Force; Start-Sleep 2; sc.exe delete capture; Start-Sleep 2 }
+        Remove-Item "C:\capture" -Recurse -Force -ErrorAction SilentlyContinue
+
+    - name: Create dir
+      ansible.windows.win_file:
+        path: C:\capture
+        state: directory
+
+    - name: Copy zip
       ansible.windows.win_copy:
         src: capture_1.4.0_windows_amd64.zip
-        dest: C:\Windows\Temp\capture.zip
-      register: copied
+        dest: C:\capture\capture.zip
 
-    - name: Install capture from local zip
+    - name: Extract zip
       ansible.windows.win_shell: |
-        $dir = "C:\Program Files\Capture"
-        $port = 59232
-        $secret = "Until1987"
-        New-Item -ItemType Directory -Force -Path $dir | Out-Null
-        if (Get-Service -Name capture -ErrorAction SilentlyContinue) {
-          Stop-Service -Name capture -Force -ErrorAction SilentlyContinue
-          Start-Sleep 2; sc.exe delete capture; Start-Sleep 2
-        }
         Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [System.IO.Compression.ZipFile]::ExtractToDirectory("C:\Windows\Temp\capture.zip", $dir)
-        sc.exe create capture binPath="`"$dir\capture.exe`" serve --port $port --secret $secret" start=auto DisplayName="Capture Agent"
-        Start-Service -Name capture
-        New-NetFirewallRule -DisplayName "Capture-Port-$port" -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -ErrorAction SilentlyContinue
-        $svc = Get-Service -Name capture
-        Write-Host "Service: $($svc.Status)"
-        Remove-Item "C:\Windows\Temp\capture.zip" -Force -ErrorAction SilentlyContinue
-      register: result
+        [System.IO.Compression.ZipFile]::ExtractToDirectory("C:\capture\capture.zip", "C:\capture")
+        Remove-Item "C:\capture\capture.zip" -Force
+        $f = Get-ChildItem "C:\capture"
+        foreach ($fi in $f) { Write-Host ("file: " + $fi.Name + " " + $fi.Length) }
 
-    - name: Show result
-      debug:
-        var: result.stdout_lines
+    - name: Create service
+      ansible.windows.win_shell: |
+        sc.exe create capture binPath= "C:\capture\capture.exe serve --port 59232 --secret Until1987" start= auto DisplayName= "Capture Agent"
+
+    - name: Firewall rule
+      ansible.windows.win_shell: |
+        netsh advfirewall firewall add rule name="Capture-Port-59232" dir=in action=allow protocol=TCP localport=59232
+
+    - name: Start service
+      ansible.windows.win_shell: |
+        net start capture
+        Start-Sleep 3
+        $s = Get-Service -Name capture
+        Write-Host ("status: " + $s.Status)
+        $p = Get-Process -Name capture -ErrorAction SilentlyContinue
+        if ($p) { Write-Host ("pid: " + $p.Id) } else { Write-Host "pid: none" }
+        $n = netstat -ano | Select-String ":59232"
+        if ($n) { Write-Host "port: yes" } else { Write-Host "port: no" }
