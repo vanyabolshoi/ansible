@@ -1,7 +1,7 @@
-param($Port = 59232, $Secret = "Until1987")
+param($Port = 5986, $Prefix = "/capture", $Secret = "Until1987")
 
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add("http://+:$Port/")
+$listener.Prefixes.Add("http://+:$Port$Prefix/")
 $listener.Start()
 
 while ($listener.IsListening) {
@@ -10,7 +10,7 @@ while ($listener.IsListening) {
     $req = $ctx.Request
     $res = $ctx.Response
 
-    if ($req.Url.AbsolutePath -eq "/health") {
+    if ($req.Url.AbsolutePath -eq "$Prefix/health") {
       $buffer = [System.Text.Encoding]::UTF8.GetBytes("OK")
       $res.ContentType = "text/plain"
       $res.OutputStream.Write($buffer, 0, $buffer.Length)
@@ -18,7 +18,7 @@ while ($listener.IsListening) {
       continue
     }
 
-    if ($req.Url.AbsolutePath -ne "/api/v1/metrics") {
+    if ($req.Url.AbsolutePath -ne "$Prefix/api/v1/metrics") {
       $res.StatusCode = 404; $res.Close(); continue
     }
 
@@ -27,15 +27,12 @@ while ($listener.IsListening) {
       $res.StatusCode = 401; $res.Close(); continue
     }
 
-    # Disk
     $disks = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -gt 0 } | ForEach-Object {
       @{mount = $_.Name + ":\"; total = [math]::Round($_.Used + $_.Free); used = [math]::Round($_.Used); available = [math]::Round($_.Free); usedPercent = [math]::Round(($_.Used / ($_.Used + $_.Free)) * 100, 1)}
     }
 
-    # CPU
     $cpu = (Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average
 
-    # Memory
     $os = Get-CimInstance Win32_OperatingSystem
     $memTotal = [math]::Round($os.TotalVisibleMemorySize * 1024)
     $memFree = [math]::Round($os.FreePhysicalMemory * 1024)
