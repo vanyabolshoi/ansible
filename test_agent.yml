@@ -1,0 +1,23 @@
+---
+- name: Test agent directly
+  hosts: all
+  gather_facts: no
+  tasks:
+    - ansible.windows.win_shell: |
+        $job = Start-Job -ScriptBlock { & "powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "C:\capture\capture_agent.ps1" }
+        Start-Sleep 8
+        if ($job.State -eq "Running") {
+          Write-Host "JOB: Running"
+          $n = netstat -ano | Select-String ":59232"
+          if ($n) { Write-Host "PORT: yes"; $n } else { Write-Host "PORT: no" }
+          Stop-Job $job -ErrorAction SilentlyContinue
+        } else {
+          Write-Host ("JOB: " + $job.State)
+          $out = Receive-Job $job -ErrorAction SilentlyContinue
+          Write-Host ("OUT: " + ($out -join " | ")[0..500])
+        }
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
+        exit 0
+      register: r
+    - debug:
+        var: r.stdout_lines
