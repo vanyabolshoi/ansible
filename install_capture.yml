@@ -32,15 +32,15 @@
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         [System.IO.Compression.ZipFile]::ExtractToDirectory("C:\capture\capture.zip", "C:\capture")
         Remove-Item "C:\capture\capture.zip" -Force
-        Get-ChildItem "C:\capture" | ForEach-Object { Write-Host ($_.Name + " " + $_.Length) }
         exit 0
 
-    - name: Create service with New-Service
+    - name: Create service
       ansible.windows.win_shell: |
         $exe = "C:\capture\capture.exe"
         if (-not (Test-Path $exe)) { throw "capture.exe not found" }
-        $bp = $exe + " serve --port 59232 --secret Until1987"
-        New-Service -Name capture -BinaryPathName $bp -DisplayName "Capture Agent" -StartupType Automatic
+        New-Service -Name capture -BinaryPathName $exe -DisplayName "Capture Monitoring Agent" -Description "Capture hardware monitoring agent" -StartupType Automatic
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\capture" -Name "Environment" -Value @("API_SECRET=Until1987", "PORT=59232", "GIN_MODE=release") -Type MultiString
+        Write-Host "service created"
         exit 0
 
     - name: Add firewall rule
@@ -51,7 +51,7 @@
     - name: Start service
       ansible.windows.win_shell: |
         Start-Service -Name capture
-        Start-Sleep 3
+        Start-Sleep 5
         $s = Get-Service -Name capture
         Write-Host ("status: " + $s.Status)
         $p = Get-Process -Name capture -ErrorAction SilentlyContinue
