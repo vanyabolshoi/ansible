@@ -1,0 +1,24 @@
+---
+- name: Collect system metrics from all pharmacies
+  hosts: all
+  gather_facts: no
+  serial: 100
+  tasks:
+    - ansible.windows.win_shell: |
+        $hostname = $env:COMPUTERNAME
+        $json = @{}
+        $json.hostname = $hostname
+        $disks = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Used -gt 0 } | ForEach-Object { @{mount=$_.Name+":\"; total=[math]::Round($_.Used+$_.Free); used=[math]::Round($_.Used); free=[math]::Round($_.Free); usedPercent=[math]::Round(($_.Used/($_.Used+$_.Free))*100,1)} }
+        $json.disks = $disks
+        $cpu = (Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average
+        $os = Get-CimInstance Win32_OperatingSystem
+        $memTotal = [math]::Round($os.TotalVisibleMemorySize * 1024)
+        $memFree = [math]::Round($os.FreePhysicalMemory * 1024)
+        $json.cpu = @{percentUsed=[math]::Round($cpu,1); cores=(Get-CimInstance Win32_Processor).Count}
+        $json.memory = @{total=$memTotal; used=$memTotal-$memFree; free=$memFree; usedPercent=[math]::Round(($memTotal-$memFree)/$memTotal*100,1)}
+        Write-Host ($json | ConvertTo-Json -Compress)
+        exit 0
+      register: result
+
+    - debug:
+        msg: "{{ result.stdout_lines }}"
