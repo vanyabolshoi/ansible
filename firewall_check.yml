@@ -1,0 +1,18 @@
+---
+- name: Check firewall
+  hosts: all
+  gather_facts: no
+  tasks:
+    - ansible.windows.win_shell: |
+        $svc = Get-Service -Name mpssvc -ErrorAction SilentlyContinue
+        if ($svc) { Write-Host ("FW_SVC: " + $svc.Status) } else { Write-Host "FW_SVC: missing" }
+        $r = netsh advfirewall firewall show rule name="Capture-Port-59232" 2>&1 | ForEach-Object { Write-Host $_ }
+        Write-Host "=== port ==="
+        $p = Get-Process -Id (Get-NetTCPConnection -LocalPort 59232 -ErrorAction SilentlyContinue).OwningProcess -ErrorAction SilentlyContinue
+        if ($p) { Write-Host ("LISTENER: " + $p.Name + " PID:" + $p.Id) } else { Write-Host "LISTENER: none" }
+        Write-Host "=== all listeners ==="
+        netstat -ano | Select-String "LISTENING" | ForEach-Object { Write-Host $_ }
+        exit 0
+      register: r
+    - debug:
+        var: r.stdout_lines
