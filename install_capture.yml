@@ -2,45 +2,33 @@
 - name: Install Capture Agent
   hosts: all
   gather_facts: no
-  vars:
-    secret: "Until1987"
-    port: 59232
-    dir: "C:\\Program Files\\Capture"
   tasks:
-    - name: Install capture via PowerShell
+    - name: Copy capture zip from controller
+      ansible.windows.win_copy:
+        src: capture_1.4.0_windows_amd64.zip
+        dest: C:\Windows\Temp\capture.zip
+      register: copied
+
+    - name: Install capture from local zip
       ansible.windows.win_shell: |
-        $dir = "{{ dir }}"
-        $port = {{ port }}
-        $secret = "{{ secret }}"
-        $zipUrl = "https://github.com/bluewave-labs/capture/releases/download/v1.4.0/capture_1.4.0_windows_amd64.zip"
-        $zipPath = "$dir\capture.zip"
-        $exePath = "$dir\capture.exe"
+        $dir = "C:\Program Files\Capture"
+        $port = 59232
+        $secret = "Until1987"
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
         if (Get-Service -Name capture -ErrorAction SilentlyContinue) {
           Stop-Service -Name capture -Force -ErrorAction SilentlyContinue
-          Start-Sleep 2
-          sc.exe delete capture
-          Start-Sleep 2
+          Start-Sleep 2; sc.exe delete capture; Start-Sleep 2
         }
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Write-Host "Downloading..."
-        Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -TimeoutSec 120 -UseBasicParsing
-        Write-Host "Extracting..."
         Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $dir)
-        Remove-Item $zipPath -Force
-        Write-Host "Creating service..."
-        sc.exe create capture binPath="`"$exePath`" serve --port $port --secret $secret" start=auto DisplayName="Capture Agent"
-        Write-Host "Starting..."
+        [System.IO.Compression.ZipFile]::ExtractToDirectory("C:\Windows\Temp\capture.zip", $dir)
+        sc.exe create capture binPath="`"$dir\capture.exe`" serve --port $port --secret $secret" start=auto DisplayName="Capture Agent"
         Start-Service -Name capture
         New-NetFirewallRule -DisplayName "Capture-Port-$port" -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -ErrorAction SilentlyContinue
         $svc = Get-Service -Name capture
         Write-Host "Service: $($svc.Status)"
-        try {
-          $r = Invoke-WebRequest -Uri "http://localhost:$port/api/v1/metrics" -TimeoutSec 5 -UseBasicParsing
-          Write-Host "API: OK ($($r.StatusCode))"
-        } catch { Write-Host "API: FAIL ($_)" }
+        Remove-Item "C:\Windows\Temp\capture.zip" -Force -ErrorAction SilentlyContinue
+      register: result
 
-    - name: Show stdout
+    - name: Show result
       debug:
         var: result.stdout_lines
