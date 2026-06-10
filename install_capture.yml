@@ -3,11 +3,19 @@
   hosts: all
   gather_facts: no
   tasks:
-    - name: Clean old
+    - name: Clean old service
       ansible.windows.win_shell: |
         $s = Get-Service -Name capture -ErrorAction SilentlyContinue
-        if ($s) { Stop-Service -Name capture -Force; Start-Sleep 2; sc.exe delete capture; Start-Sleep 2 }
-        Remove-Item "C:\capture" -Recurse -Force -ErrorAction SilentlyContinue
+        if ($s) { sc.exe stop capture 2>$null; Start-Sleep 2; sc.exe delete capture 2>$null; Start-Sleep 2 }
+        exit 0
+
+    - name: Clean old files
+      ansible.windows.win_file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - C:\capture
+        - C:\Program Files\Capture
 
     - name: Create dir
       ansible.windows.win_file:
@@ -24,20 +32,25 @@
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         [System.IO.Compression.ZipFile]::ExtractToDirectory("C:\capture\capture.zip", "C:\capture")
         Remove-Item "C:\capture\capture.zip" -Force
-        $f = Get-ChildItem "C:\capture"
-        foreach ($fi in $f) { Write-Host ("file: " + $fi.Name + " " + $fi.Length) }
+        Get-ChildItem "C:\capture" | ForEach-Object { Write-Host ($_.Name + " " + $_.Length) }
+        exit 0
 
-    - name: Create service
+    - name: Create service with New-Service
       ansible.windows.win_shell: |
-        sc.exe create capture binPath= "C:\capture\capture.exe serve --port 59232 --secret Until1987" start= auto DisplayName= "Capture Agent"
+        $exe = "C:\capture\capture.exe"
+        if (-not (Test-Path $exe)) { throw "capture.exe not found" }
+        $bp = $exe + " serve --port 59232 --secret Until1987"
+        New-Service -Name capture -BinaryPathName $bp -DisplayName "Capture Agent" -StartupType Automatic
+        exit 0
 
-    - name: Firewall rule
+    - name: Add firewall rule
       ansible.windows.win_shell: |
         netsh advfirewall firewall add rule name="Capture-Port-59232" dir=in action=allow protocol=TCP localport=59232
+        exit 0
 
     - name: Start service
       ansible.windows.win_shell: |
-        net start capture
+        Start-Service -Name capture
         Start-Sleep 3
         $s = Get-Service -Name capture
         Write-Host ("status: " + $s.Status)
@@ -45,3 +58,4 @@
         if ($p) { Write-Host ("pid: " + $p.Id) } else { Write-Host "pid: none" }
         $n = netstat -ano | Select-String ":59232"
         if ($n) { Write-Host "port: yes" } else { Write-Host "port: no" }
+        exit 0
