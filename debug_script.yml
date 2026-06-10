@@ -1,0 +1,22 @@
+---
+- name: Debug script
+  hosts: all
+  gather_facts: no
+  tasks:
+    - ansible.windows.win_shell: |
+        $ErrorActionPreference = "Stop"
+        try {
+          $listener = New-Object System.Net.HttpListener
+          $listener.Prefixes.Add("http://+:59232/")
+          Write-Host "listener created"
+          $listener.Start()
+          Write-Host "listener started"
+          $listener.Stop()
+          Write-Host "listener stopped"
+        } catch {
+          Write-Host ("ERROR: " + $_.Exception.Message)
+        }
+        exit 0
+      register: r
+    - debug:
+        var: r.stdout_lines
