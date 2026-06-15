@@ -18,10 +18,14 @@
                 $_.IPAddress -notlike '127.*' -and
                 $_.IPAddress -notlike '169.254*' -and
                 $_.IPAddress -notlike '0.*' -and
+                $_.IPAddress -notlike '10.8.*' -and
                 $_.IPAddress -match '\.5$'
               } |
               Sort-Object InterfaceMetric, SkipAsSource |
               Select-Object -ExpandProperty IPAddress)
+            # Prefer 10.10.x.x (pharmacy LAN), skip VPN (10.8.x.x)
+            $preferred = @($ips | Where-Object { $_ -like '10.10.*' })
+            if ($preferred.Count -gt 0) { return [string]$preferred[0] }
             if ($ips.Count -gt 0) { return [string]$ips[0] }
             return ""
           }
