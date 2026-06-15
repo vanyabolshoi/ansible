@@ -61,6 +61,22 @@
             }
           }
 
+          function Test-ArpPresence([string]$Ip) {
+            try {
+              $nei = Get-NetNeighbor -IPAddress $Ip -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($nei -and $nei.LinkLayerAddress -and $nei.State -notin @('Unreachable','Incomplete')) {
+                return $true
+              }
+            } catch {}
+            try {
+              $arp = arp -a $Ip 2>$null
+              if ($arp -match [regex]::Escape($Ip) -and $arp -match '([0-9a-f]{2}-){5}[0-9a-f]{2}') {
+                return $true
+              }
+            } catch {}
+            return $false
+          }
+
           function Test-NeighborIps([string]$Subnet, [int[]]$Suffixes, [int[]]$Ports) {
             $found = @()
             foreach ($suffix in $Suffixes) {
@@ -76,6 +92,15 @@
                   $found += $ip
                   break
                 }
+              }
+              if ($found -contains $ip) {
+                continue
+              }
+              try {
+                Test-Connection -ComputerName $ip -Count 1 -Quiet -TimeoutSeconds 1 | Out-Null
+              } catch {}
+              if (Test-ArpPresence -Ip $ip) {
+                $found += $ip
               }
             }
             return @($found | Select-Object -Unique)
