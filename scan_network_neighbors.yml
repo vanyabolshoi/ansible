@@ -60,10 +60,12 @@
                 }
               } catch {}
               try {
-                $port135 = Test-NetConnection -ComputerName $ip -Port 135 -InformationLevel Quiet -WarningAction SilentlyContinue
-                if ($port135) {
+                $client = New-Object System.Net.Sockets.TcpClient
+                $iar = $client.BeginConnect($ip, 135, $null, $null)
+                if ($iar.AsyncWaitHandle.WaitOne(700, $false) -and $client.Connected) {
                   $found += $ip
                 }
+                $client.Close()
               } catch {}
             }
             return @($found | Select-Object -Unique)
