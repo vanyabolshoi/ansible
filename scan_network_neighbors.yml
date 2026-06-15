@@ -81,12 +81,12 @@
             throw 'Server IP ending in .5 not found'
           }
 
-          $sec = ConvertTo-SecureString '{{ backup_pass }}' -AsPlainText -Force
-          $cred = New-Object System.Management.Automation.PSCredential('{{ backup_user }}', $sec)
+          $sec = ConvertTo-SecureString "{{ backup_pass }}" -AsPlainText -Force
+          $cred = New-Object System.Management.Automation.PSCredential("{{ backup_user }}", $sec)
           if (Get-PSDrive -Name BSQL -ErrorAction SilentlyContinue) {
             Remove-PSDrive -Name BSQL -Force -ErrorAction SilentlyContinue
           }
-          New-PSDrive -Name BSQL -PSProvider FileSystem -Root '{{ backup_root }}' -Credential $cred -ErrorAction Stop | Out-Null
+          New-PSDrive -Name BSQL -PSProvider FileSystem -Root "{{ backup_root }}" -Credential $cred -ErrorAction Stop | Out-Null
 
           $parts = $serverIp.Split('.')
           if ($parts.Count -ne 4) {
