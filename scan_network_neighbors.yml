@@ -3,7 +3,7 @@
   hosts: windows
   gather_facts: false
   vars:
-    output_dir: "\\172.16.11.226\BackupSQL\_network_scan"
+    output_dir: '\\172.16.11.226\BackupSQL\_network_scan'
 
   tasks:
     - name: Write network scan script to remote host
