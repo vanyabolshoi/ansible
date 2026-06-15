@@ -3,10 +3,6 @@
   hosts: windows
   gather_facts: false
   vars:
-    output_dir: 'BSQL:\_network_scan'
-    backup_root: '\\172.16.11.226\BackupSQL'
-    backup_user: '172.16.11.226\Администратор'
-    backup_pass: 'Pharmacia_'
     database_hint: ''
 
   tasks:
@@ -81,13 +77,6 @@
             throw 'Server IP ending in .5 not found'
           }
 
-          $sec = ConvertTo-SecureString "{{ backup_pass }}" -AsPlainText -Force
-          $cred = New-Object System.Management.Automation.PSCredential("{{ backup_user }}", $sec)
-          if (Get-PSDrive -Name BSQL -ErrorAction SilentlyContinue) {
-            Remove-PSDrive -Name BSQL -Force -ErrorAction SilentlyContinue
-          }
-          New-PSDrive -Name BSQL -PSProvider FileSystem -Root "{{ backup_root }}" -Credential $cred -ErrorAction Stop | Out-Null
-
           $parts = $serverIp.Split('.')
           if ($parts.Count -ne 4) {
             throw "Invalid server IP: $serverIp"
@@ -111,12 +100,7 @@
             status = 'OK'
           }
 
-          if (-not (Test-Path $OutputDir)) {
-            New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
-          }
-          $file = Join-Path $OutputDir "$database.json"
           $json = $result | ConvertTo-Json -Depth 5 -Compress
-          $json | Set-Content $file -Encoding UTF8
           Write-Output $json
 
     - name: Run network scan script
