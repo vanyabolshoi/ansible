@@ -3,7 +3,8 @@
   hosts: windows
   gather_facts: false
   vars:
-    output_dir: '\\172.16.11.226\BackupSQL\_network_scan'
+    output_dir: 'BSQL:\_network_scan'
+    backup_root: '\\172.16.11.226\BackupSQL'
     backup_user: '172.16.11.226\Администратор'
     backup_pass: 'Pharmacia_'
     database_hint: ''
@@ -80,8 +81,12 @@
             throw 'Server IP ending in .5 not found'
           }
 
-          cmd /c "net use {{ output_dir }} /delete /y >nul 2>&1"
-          net use {{ output_dir }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no | Out-Null
+          $sec = ConvertTo-SecureString '{{ backup_pass }}' -AsPlainText -Force
+          $cred = New-Object System.Management.Automation.PSCredential('{{ backup_user }}', $sec)
+          if (Get-PSDrive -Name BSQL -ErrorAction SilentlyContinue) {
+            Remove-PSDrive -Name BSQL -Force -ErrorAction SilentlyContinue
+          }
+          New-PSDrive -Name BSQL -PSProvider FileSystem -Root '{{ backup_root }}' -Credential $cred -ErrorAction Stop | Out-Null
 
           $parts = $serverIp.Split('.')
           if ($parts.Count -ne 4) {
