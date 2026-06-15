@@ -1,0 +1,115 @@
+---
+- name: Scan pharmacy local network around server .5 IP
+  hosts: windows
+  gather_facts: false
+  vars:
+    output_dir: "\\172.16.11.226\BackupSQL\_network_scan"
+
+  tasks:
+    - name: Write network scan script to remote host
+      ansible.windows.win_copy:
+        dest: C:\Windows\Temp\scan_network_neighbors.ps1
+        content: |
+          param([string]$OutputDir = "{{ output_dir }}")
+          $ErrorActionPreference = "Stop"
+
+          function Get-PrimaryServerIp {
+            $ips = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.IPAddress -notlike '127.*' -and
+                $_.IPAddress -notlike '169.254*' -and
+                $_.IPAddress -notlike '0.*' -and
+                $_.IPAddress -match '\.5$'
+              } |
+              Sort-Object InterfaceMetric, SkipAsSource |
+              Select-Object -ExpandProperty IPAddress)
+            if ($ips.Count -gt 0) { return [string]$ips[0] }
+            return ""
+          }
+
+          function Get-DatabaseName {
+            try {
+              $sqlService = Get-Service | Where-Object { $_.Name -like 'MSSQL$*' } | Select-Object -First 1
+              if ($sqlService) {
+                $sqlName = $sqlService.Name -replace 'MSSQL\$',''
+                $instance = ".\\$sqlName"
+                $dbInfo = sqlcmd -S "$instance" -h -1 -W -Q "
+                SET NOCOUNT ON;
+                SELECT TOP 1 DB_NAME(database_id)
+                FROM sys.master_files
+                WHERE type_desc = 'ROWS'
+                  AND DB_NAME(database_id) NOT IN ('master','model','msdb','tempdb')
+                  AND physical_name LIKE 'C:\DataSQL%'
+                ORDER BY database_id;
+                "
+                $db = ($dbInfo | Where-Object { $_ -and $_.Trim() -ne '' } | Select-Object -First 1)
+                if ($db) { return $db.Trim() }
+              }
+            } catch {}
+            return "unknown_$env:COMPUTERNAME"
+          }
+
+          function Test-NeighborIps([string]$Subnet, [int[]]$Suffixes) {
+            $found = @()
+            foreach ($suffix in $Suffixes) {
+              $ip = "$Subnet$suffix"
+              try {
+                if (Test-Connection -ComputerName $ip -Count 1 -Quiet -TimeoutSeconds 1) {
+                  $found += $ip
+                  continue
+                }
+              } catch {}
+              try {
+                $port135 = Test-NetConnection -ComputerName $ip -Port 135 -InformationLevel Quiet -WarningAction SilentlyContinue
+                if ($port135) {
+                  $found += $ip
+                }
+              } catch {}
+            }
+            return @($found | Select-Object -Unique)
+          }
+
+          $serverIp = Get-PrimaryServerIp
+          if (-not $serverIp) {
+            throw 'Server IP ending in .5 not found'
+          }
+
+          $parts = $serverIp.Split('.')
+          if ($parts.Count -ne 4) {
+            throw "Invalid server IP: $serverIp"
+          }
+          $subnet = "$($parts[0]).$($parts[1]).$($parts[2])."
+          $database = Get-DatabaseName
+          $cashIps = Test-NeighborIps -Subnet $subnet -Suffixes @(11,12,13,14,15,16)
+          $printerIps = Test-NeighborIps -Subnet $subnet -Suffixes @(21,22,23,24,25,26,27,28,29)
+
+          $result = [ordered]@{
+            time = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+            database = $database
+            computer = $env:COMPUTERNAME
+            host = '{{ inventory_hostname }}'
+            local_ip = $serverIp
+            subnet = $subnet
+            cash_ips = @($cashIps)
+            printer_ips = @($printerIps)
+            cash_count = @($cashIps).Count
+            printer_count = @($printerIps).Count
+            status = 'OK'
+          }
+
+          if (-not (Test-Path $OutputDir)) {
+            New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+          }
+          $file = Join-Path $OutputDir "$database.json"
+          $json = $result | ConvertTo-Json -Depth 5 -Compress
+          $json | Set-Content $file -Encoding UTF8
+          Write-Output $json
+
+    - name: Run network scan script
+      ansible.windows.win_shell: |
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Temp\scan_network_neighbors.ps1
+      register: script_output
+
+    - name: Show network scan result
+      debug:
+        var: script_output.stdout_lines
