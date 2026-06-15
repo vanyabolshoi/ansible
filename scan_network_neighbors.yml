@@ -27,6 +27,17 @@
             $preferred = @($ips | Where-Object { $_ -like '10.10.*' })
             if ($preferred.Count -gt 0) { return [string]$preferred[0] }
             if ($ips.Count -gt 0) { return [string]$ips[0] }
+            # Fallback: include 10.8.x.x if nothing else found
+            $allIps = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.IPAddress -notlike '127.*' -and
+                $_.IPAddress -notlike '169.254*' -and
+                $_.IPAddress -notlike '0.*' -and
+                $_.IPAddress -match '\.5$'
+              } |
+              Sort-Object InterfaceMetric, SkipAsSource |
+              Select-Object -ExpandProperty IPAddress)
+            if ($allIps.Count -gt 0) { return [string]$allIps[0] }
             return ""
           }
 
