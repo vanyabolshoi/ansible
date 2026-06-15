@@ -10,7 +10,6 @@
       ansible.windows.win_copy:
         dest: C:\Windows\Temp\scan_network_neighbors.ps1
         content: |
-          param([string]$OutputDir = "{{ output_dir }}")
           $ErrorActionPreference = "Stop"
 
           function Get-PrimaryServerIp {
