@@ -118,8 +118,18 @@
           $subnet = "$($parts[0]).$($parts[1]).$($parts[2])."
           $database = Get-DatabaseName
           $cashIps = Test-NeighborIps -Subnet $subnet -Suffixes @(11,12,13,14,15,16) -Ports @(135,445,3389,5985,5986)
-          $mariaIps = Test-NeighborIps -Subnet $subnet -Suffixes @(22) -Ports @(9100,9101,515,631,80,443,23)
-          $printerIps = Test-NeighborIps -Subnet $subnet -Suffixes @(21,23,24,25,26,27,28,29) -Ports @(9100,9101,515,631,80,443,23)
+
+          # Discover service devices (21-29) and classify by ICMP ping:
+          # responding → printer, silent → Maria
+          $mariaIps = @(); $printerIps = @()
+          foreach ($_sfx in @(21,22,23,24,25,26,27,28,29)) {
+            $_ip = "$subnet$_sfx"
+            $_found = $false; $_pingable = $false
+            try { if (Test-Connection -ComputerName $_ip -Count 1 -Quiet -TimeoutSeconds 1) { $_pingable = $true; $_found = $true } } catch {}
+            if (-not $_found) { foreach ($_pt in @(9100,9101,515,631,80,443,23)) { if (Test-TcpPort -Ip $_ip -Port $_pt) { $_found = $true; break } } }
+            if (-not $_found) { if (Test-ArpPresence -Ip $_ip) { $_found = $true } }
+            if ($_found) { if ($_pingable) { $printerIps += $_ip } else { $mariaIps += $_ip } }
+          }
 
           $result = [ordered]@{
             time = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
