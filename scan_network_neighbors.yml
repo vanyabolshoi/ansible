@@ -4,6 +4,9 @@
   gather_facts: false
   vars:
     output_dir: '\\172.16.11.226\BackupSQL\_network_scan'
+    backup_user: '172.16.11.226\Администратор'
+    backup_pass: 'Pharmacia_'
+    database_hint: ''
 
   tasks:
     - name: Write network scan script to remote host
@@ -28,6 +31,7 @@
           }
 
           function Get-DatabaseName {
+            if ('{{ database_hint }}') { return '{{ database_hint }}' }
             try {
               $sqlService = Get-Service | Where-Object { $_.Name -like 'MSSQL$*' } | Select-Object -First 1
               if ($sqlService) {
@@ -75,6 +79,9 @@
           if (-not $serverIp) {
             throw 'Server IP ending in .5 not found'
           }
+
+          cmd /c "net use {{ output_dir }} /delete /y >nul 2>&1"
+          net use {{ output_dir }} /user:{{ backup_user }} {{ backup_pass }} /persistent:no | Out-Null
 
           $parts = $serverIp.Split('.')
           if ($parts.Count -ne 4) {
