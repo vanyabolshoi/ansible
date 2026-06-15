@@ -148,6 +148,11 @@
             }
           }
 
+          # If no printer/Maria found at all, assume server itself is the service host
+          if ($mariaIps.Count -eq 0 -and $printerIps.Count -eq 0) {
+            if (Test-TcpPort -Ip $serverIp -Port 80 -TimeoutMs 500) { $printerIps += $serverIp } else { $mariaIps += $serverIp }
+          }
+
           $result = [ordered]@{
             time = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
             database = $database
