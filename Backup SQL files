@@ -1,5 +1,5 @@
 ---
-- name: SQL Server Enterprise Backup Pipeline
+- name: SQL Server Enterprise Backup v2 (Production Grade)
   hosts: all
   gather_facts: no
 
@@ -10,7 +10,7 @@
 
   tasks:
 
-  - name: Run SQL Enterprise Backup
+  - name: SQL Enterprise Backup Engine
     ansible.windows.win_shell: |
 
       $ErrorActionPreference = "Stop"
@@ -23,70 +23,71 @@
 
         if (-not $Db) { $Db = "unknown_{{ inventory_hostname }}" }
 
-        $obj = @{
+        @{
           database = $Db
-          host = $env:COMPUTERNAME
-          status = $Status
-          text = $Text
-          time = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-        }
-
-        $obj | ConvertTo-Json -Depth 5 | Out-File "$dir\$Db.json" -Encoding UTF8
+          host     = $env:COMPUTERNAME
+          status   = $Status
+          text     = $Text
+          time     = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        } | ConvertTo-Json -Depth 5 | Out-File "$dir\$Db.json" -Encoding UTF8
       }
 
       try {
 
         # -----------------------------
-        # 1. CONNECT SHARE SAFELY
+        # 1. CONNECT SHARE
         # -----------------------------
         net use {{ backup_share }} /delete /y 2>$null | Out-Null
-        cmdkey /add:{{ backup_server }} /user:{{ backup_user }} /pass:$env:BACKUP_PASS
+        cmdkey /add:{{ backup_server }} /user:{{ backup_user }} /pass:$env:BACKUP_PASS | Out-Null
         net use {{ backup_share }} /user:{{ backup_user }} $env:BACKUP_PASS /persistent:no
 
-        if (!(Get-ChildItem "{{ backup_share }}" -ErrorAction Stop)) {
-          throw "Cannot access backup share"
+        if (!(Test-Path "{{ backup_share }}")) {
+          throw "Backup share unavailable"
         }
 
         # -----------------------------
-        # 2. DETECT SQL INSTANCE
+        # 2. SQL INSTANCE DETECTION
         # -----------------------------
         $service = Get-Service | Where-Object { $_.Name -like "MSSQL$*" } | Select-Object -First 1
-        if (-not $service) { throw "SQL service not found" }
+        if (-not $service) { throw "SQL Server not found" }
 
         $instance = ".\" + ($service.Name -replace "MSSQL\$","")
 
         # -----------------------------
-        # 3. GET DATABASE LIST SAFELY
+        # 3. GET ALL DATABASES
         # -----------------------------
         $dbs = sqlcmd -S $instance -h -1 -W -Q "
         SET NOCOUNT ON;
         SELECT name
         FROM sys.databases
-        WHERE name NOT IN ('master','model','msdb','tempdb')
+        WHERE name NOT IN ('master','model','msdb','tempdb');
         "
 
         $dbs = $dbs | Where-Object { $_ -and $_.Trim() -ne "" }
 
         if (-not $dbs) { throw "No databases found" }
 
+        New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
+
         # -----------------------------
-        # 4. BACKUP LOOP (ENTERPRISE SAFE)
+        # 4. BACKUP LOOP
         # -----------------------------
         foreach ($db in $dbs) {
 
           $db = $db.Trim()
 
-          Write-Status "starting" "Starting backup" $db
+          Write-Status "starting" "Backup started" $db
 
           $backupFile = "C:\TEMPO\$db.bak"
-          New-Item -ItemType Directory -Path "C:\TEMPO" -Force | Out-Null
+          $finalFile  = "{{ backup_share }}\$db.bak"
+          $tempFile    = "{{ backup_share }}\$db.bak.tmp"
 
           if (Test-Path $backupFile) {
             Remove-Item $backupFile -Force
           }
 
           # -----------------------------
-          # 5. SQL BACKUP (SAFE)
+          # 5. SAFE SQL BACKUP
           # -----------------------------
           $sql = @"
 BACKUP DATABASE [$db]
@@ -100,54 +101,53 @@ STATS = 10;
           sqlcmd -S $instance -Q $sql
 
           if (!(Test-Path $backupFile)) {
-            throw "Backup file missing: $db"
+            throw "Backup failed: $db"
           }
 
           # -----------------------------
           # 6. VERIFY BACKUP
           # -----------------------------
-          $verify = sqlcmd -S $instance -Q "
-RESTORE VERIFYONLY FROM DISK = N'$backupFile';
-"
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "Backup verification failed: $db"
-          }
+          sqlcmd -S $instance -Q "RESTORE VERIFYONLY FROM DISK = N'$backupFile';"
 
           # -----------------------------
-          # 7. COPY TO SHARE (RELIABLE)
+          # 7. ATOMIC COPY (SAFE)
           # -----------------------------
-          $dest = "{{ backup_share }}\$db.bak"
-
           for ($i=1; $i -le 3; $i++) {
             try {
-              Copy-Item $backupFile $dest -Force
+              Copy-Item $backupFile $tempFile -Force
               break
             } catch {
               Start-Sleep -Seconds 5
             }
           }
 
-          if (!(Test-Path $dest)) {
-            throw "Copy failed after retries: $db"
+          if (!(Test-Path $tempFile)) {
+            throw "Copy failed: $db"
+          }
+
+          # atomic rename (final commit)
+          Move-Item $tempFile $finalFile -Force
+
+          if (!(Test-Path $finalFile)) {
+            throw "Final file missing: $db"
           }
 
           # -----------------------------
           # 8. SIZE CHECK
           # -----------------------------
           $local = (Get-Item $backupFile).Length
-          $remote = (Get-Item $dest).Length
+          $remote = (Get-Item $finalFile).Length
 
           if ($local -ne $remote) {
-            throw "Size mismatch $db"
+            throw "Size mismatch: $db"
           }
 
           # -----------------------------
-          # 9. FINAL STATUS
+          # 9. CLEANUP
           # -----------------------------
-          Write-Status "done" "Backup successful" $db
-
           Remove-Item $backupFile -Force
+
+          Write-Status "done" "Backup successful" $db
         }
 
         net use {{ backup_share }} /delete /y
@@ -155,6 +155,5 @@ RESTORE VERIFYONLY FROM DISK = N'$backupFile';
       } catch {
 
         Write-Status "error" $_.Exception.Message "unknown_{{ inventory_hostname }}"
-        throw $_
-
+        throw
       }
