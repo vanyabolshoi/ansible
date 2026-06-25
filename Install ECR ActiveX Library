@@ -24,7 +24,6 @@
   * name: Install ECR ActiveX Library
     ansible.windows.win_package:
     path: "{{ installer_path }}"
-    arguments: "/S"
     state: present
 
   * name: Remove installer
