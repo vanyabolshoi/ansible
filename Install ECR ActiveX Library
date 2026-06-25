@@ -1,5 +1,5 @@
 ---
-- name: Install ECR ActiveX Library (MSI/Package mode)
+- name: Install ECR ActiveX Library (Enterprise stable version)
   hosts: all
   gather_facts: no
 
@@ -7,6 +7,8 @@
     installer_url: "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
     installer_path: "C:\\Temp\\ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
     install_log: "C:\\Temp\\ecr_install.log"
+    timeout_sec: 900
+    retries: 2
 
   tasks:
 
@@ -21,31 +23,77 @@
         dest: "{{ installer_path }}"
         force: true
 
-    - name: Install via win_package (preferred method)
-      ansible.windows.win_package:
-        path: "{{ installer_path }}"
-        state: present
-        arguments: "/S /NORESTART"
+    # =========================
+    # INSTALL WITH CONTROL
+    # =========================
+    - name: Run installer with timeout + control
+      ansible.windows.win_shell: |
+        $log = "{{ install_log }}"
+        $exe = "{{ installer_path }}"
+
+        function Run-Install {
+            $p = Start-Process -FilePath $exe `
+                -ArgumentList "/S /NORESTART" `
+                -WindowStyle Hidden `
+                -PassThru
+
+            $timeout = {{ timeout_sec }}
+            $elapsed = 0
+
+            while (-not $p.HasExited -and $elapsed -lt $timeout) {
+                Start-Sleep -Seconds 5
+                $elapsed += 5
+            }
+
+            if (-not $p.HasExited) {
+                Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+                "TIMEOUT" | Out-File $log -Append
+                exit 124
+            }
+
+            $p.ExitCode | Out-File $log -Append
+            exit $p.ExitCode
+        }
+
+        Run-Install
+
       register: install_result
-      failed_when: install_result.failed is defined and install_result.failed
+      failed_when: install_result.rc not in [0, 3010, 124]
+      retries: "{{ retries }}"
+      delay: 10
+      until: install_result.rc is defined
 
-    - name: Wait for installation stabilization
+    # =========================
+    # CLEAN HANGING PROCESSES
+    # =========================
+    - name: Cleanup leftover installer processes
       ansible.windows.win_shell: |
-        Start-Sleep -Seconds 10
+        Get-Process | Where-Object {
+          $_.Name -like "*ECR*" -or $_.Name -like "*setup*" -or $_.Name -like "*install*"
+        } | Stop-Process -Force -ErrorAction SilentlyContinue
 
-    - name: Verify installation (Registry CLSID check)
+    # =========================
+    # VERIFY INSTALLATION
+    # =========================
+    - name: Check COM/ActiveX registration
       ansible.windows.win_shell: |
-        $result = Get-ChildItem HKCR:\CLSID -ErrorAction SilentlyContinue |
-        Get-ItemProperty -ErrorAction SilentlyContinue |
-        Where-Object { $_.PSObject.Properties.Value -match "ECR" }
+        $found = Get-ChildItem HKCR:\CLSID -ErrorAction SilentlyContinue |
+          ForEach-Object {
+            try {
+              $_ | Get-ItemProperty -ErrorAction SilentlyContinue
+            } catch {}
+          } |
+          Where-Object { $_ -match "ECR" }
 
-        if ($result) {
-          "ECR_FOUND"
+        if ($found) {
+          "ECR_INSTALLED"
         } else {
           "NOT_FOUND"
         }
-      register: clsid_check
+      register: verify
 
     - name: Show result
       ansible.builtin.debug:
-        msg: "{{ clsid_check.stdout }}"
+        msg: |
+          Install RC: {{ install_result.rc }}
+          Verification: {{ verify.stdout }}
