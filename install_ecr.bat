@@ -2,34 +2,30 @@
 chcp 65001 >nul
 
 echo ===============================
-echo   ECR ActiveX Clean Install
+echo   ECR ActiveX Auto Installer
 echo ===============================
 
-:: --- админ проверка ---
+:: --- проверка админа ---
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    powershell -Command "Start-Process '%~f0'"
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
     exit
 )
 
-echo.
-echo [1/3] Удаление старой версии...
-
-wmic product where "Name like 'ECR ActiveX%%'" call uninstall /nointeractive >nul 2>&1
-
-:: убиваем зависшие процессы
-taskkill /f /im ECR*.exe >nul 2>&1
+:: --- путь к установщику ---
+set SETUP=C:\temp\ECR_ActiveX_Library_x64_v.1.10.6.2.exe
 
 echo.
-echo [2/3] Установка новой версии...
+echo [1/2] Установка новой версии...
 
-start "" /wait "C:\temp\ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
+start /wait "" "%SETUP%" /verysilent /norestart
 
-:: fallback на случай зависания
-timeout /t 5 >nul
+if %errorLevel% neq 0 (
+    start /wait "" "%SETUP%" /silent /norestart
+)
 
 echo.
-echo [3/3] Проверка результата...
+echo [2/2] Проверка установки...
 
 reg query HKCR\CLSID /s | findstr /i "ECR"
 
