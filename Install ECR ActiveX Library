@@ -1,5 +1,5 @@
 ---
-- name: Install ECR ActiveX Library (verified install)
+- name: Install ECR ActiveX Library (MSI/Package mode)
   hosts: all
   gather_facts: no
 
@@ -21,17 +21,31 @@
         dest: "{{ installer_path }}"
         force: true
 
-    - name: Run installer (silent + log)
-      ansible.windows.win_shell: |
-        Start-Process -FilePath "{{ installer_path }}" -ArgumentList "/S /NORESTART /LOG {{ install_log }}" -WindowStyle Hidden -Wait
+    - name: Install via win_package (preferred method)
+      ansible.windows.win_package:
+        path: "{{ installer_path }}"
+        state: present
+        arguments: "/S /NORESTART"
+      register: install_result
+      failed_when: install_result.failed is defined and install_result.failed
 
-    - name: Check installation (CLSID)
+    - name: Wait for installation stabilization
       ansible.windows.win_shell: |
-        Get-ItemProperty HKCR:\CLSID\* -ErrorAction SilentlyContinue |
-        Select-String -Pattern "ECR"
-      register: clsid_result
-      ignore_errors: yes
+        Start-Sleep -Seconds 10
+
+    - name: Verify installation (Registry CLSID check)
+      ansible.windows.win_shell: |
+        $result = Get-ChildItem HKCR:\CLSID -ErrorAction SilentlyContinue |
+        Get-ItemProperty -ErrorAction SilentlyContinue |
+        Where-Object { $_.PSObject.Properties.Value -match "ECR" }
+
+        if ($result) {
+          "ECR_FOUND"
+        } else {
+          "NOT_FOUND"
+        }
+      register: clsid_check
 
     - name: Show result
       ansible.builtin.debug:
-        var: clsid_result.stdout
+        msg: "{{ clsid_check.stdout }}"
