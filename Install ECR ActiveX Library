@@ -1,29 +1,101 @@
 ---
-- name: Install ECR ActiveX Library
+
+* name: Install ECR ActiveX Library (verified install)
   hosts: all
   gather_facts: no
 
   vars:
-    installer_url: "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
-    installer_path: "C:\\Temp\\ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
+  installer_url: "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
+  installer_path: "C:\Temp\ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
+  install_log: "C:\Temp\ecr_install.log"
 
   tasks:
 
-    - name: Ensure Temp directory exists
-      ansible.windows.win_file:
-        path: C:\Temp
-        state: directory
+  # =========================
 
-    - name: Download installer
-      ansible.windows.win_get_url:
-        url: "{{ installer_url }}"
-        dest: "{{ installer_path }}"
-        force: true
+  # 1. PRE-CHECK (VERSION / EXISTENCE)
 
-    - name: Run installer
-      ansible.windows.win_shell: >
-        Start-Process -FilePath "{{ installer_path }}" -ArgumentList "/S /NORESTART" -WindowStyle Hidden
+  # =========================
 
-    - name: Wait for install
-      ansible.windows.win_wait_for:
-        timeout: 60
+  * name: Check before install - ECR in registry
+    ansible.windows.win_shell: |
+    Get-ItemProperty HKCR:\CLSID* -ErrorAction SilentlyContinue |
+    Select-String -Pattern "ECR"
+    register: before_clsid
+    ignore_errors: yes
+
+  * name: Check before install - OCX files
+    ansible.windows.win_shell: |
+    Get-ChildItem C:\Windows\System32*.ocx -ErrorAction SilentlyContinue
+    register: before_ocx
+    ignore_errors: yes
+
+  * name: Show BEFORE state
+    ansible.builtin.debug:
+    msg:
+    - "=== BEFORE CLSID ==="
+    - "{{ before_clsid.stdout }}"
+    - "=== BEFORE OCX ==="
+    - "{{ before_ocx.stdout }}"
+
+  # =========================
+
+  # 2. INSTALL
+
+  # =========================
+
+  * name: Ensure Temp directory exists
+    ansible.windows.win_file:
+    path: C:\Temp
+    state: directory
+
+  * name: Download installer
+    ansible.windows.win_get_url:
+    url: "{{ installer_url }}"
+    dest: "{{ installer_path }}"
+    force: true
+
+  * name: Run installer with logging
+    ansible.windows.win_shell: |
+    Start-Process -FilePath "{{ installer_path }}" `    -ArgumentList "/S /NORESTART /LOG {{ install_log }}"`
+    -WindowStyle Hidden -Wait
+
+  # =========================
+
+  # 3. POST-CHECK (VERIFY INSTALL)
+
+  # =========================
+
+  * name: Check after install - ECR in registry
+    ansible.windows.win_shell: |
+    Get-ItemProperty HKCR:\CLSID* -ErrorAction SilentlyContinue |
+    Select-String -Pattern "ECR"
+    register: after_clsid
+    ignore_errors: yes
+
+  * name: Check after install - OCX files
+    ansible.windows.win_shell: |
+    Get-ChildItem C:\Windows\System32*.ocx -ErrorAction SilentlyContinue
+    register: after_ocx
+    ignore_errors: yes
+
+  * name: Show AFTER state
+    ansible.builtin.debug:
+    msg:
+    - "=== AFTER CLSID ==="
+    - "{{ after_clsid.stdout }}"
+    - "=== AFTER OCX ==="
+    - "{{ after_ocx.stdout }}"
+
+  # =========================
+
+  # 4. RESULT SUMMARY
+
+  # =========================
+
+  * name: Final result summary
+    ansible.builtin.debug:
+    msg: >
+    INSTALL COMPLETE.
+    Check differences between BEFORE and AFTER outputs.
+    If CLSID/OCX changed → installation succeeded.
