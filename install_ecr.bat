@@ -1,28 +1,29 @@
 @echo off
 chcp 65001 >nul
 
-set SETUP=C:\Temp\ECR_ActiveX_Library_x64_v.1.10.6.2.exe
+echo ===============================
+echo   ECR ActiveX Silent Install
+echo ===============================
 
-if not exist "%SETUP%" (
-    echo ERROR: installer not found
-    exit /b 1
+:: запуск от админа
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit
 )
 
-echo Installing ECR...
+echo.
+echo [1/2] Удаление старой версии...
 
-"%SETUP%" /verysilent /norestart
+wmic product where "Name like 'ECR ActiveX%%'" call uninstall /nointeractive >nul 2>&1
 
-set ERR=%errorlevel%
+echo.
+echo [2/2] Установка БЕЗ UI...
 
-echo Exit code: %ERR%
+start /wait "" "C:\temp\ECR_ActiveX_Library_x64_v.1.10.6.2.exe" /verysilent /norestart
 
-if not "%ERR%"=="0" (
-    echo Trying fallback silent mode...
-    "%SETUP%" /silent /norestart
-    set ERR=%errorlevel%
-)
-
-echo Checking registry...
-reg query HKCR\CLSID /s | findstr /i "ECR"
-
-exit /b %ERR%
+echo.
+echo ===============================
+echo        ГОТОВО
+echo ===============================
+pause
