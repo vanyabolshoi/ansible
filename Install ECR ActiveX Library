@@ -1,6 +1,5 @@
----
 - name: Install ECR via BAT script
-  hosts: all
+  hosts: windows
   gather_facts: no
 
   vars:
@@ -12,20 +11,22 @@
 
   tasks:
 
-    - name: Ensure Temp directory exists
+    - name: Create temp dir
       ansible.windows.win_file:
         path: C:\Temp
         state: directory
 
-    - name: Download ECR installer
+    - name: Download installer
       ansible.windows.win_get_url:
         url: "{{ installer_url }}"
         dest: "{{ installer_path }}"
         force: true
 
-    - name: Download BAT installer script
+    - name: Download BAT
       ansible.windows.win_get_url:
         url: "{{ bat_url }}"
         dest: "{{ bat_path }}"
         force: true
 
+    - name: Run BAT
+      ansible.windows.win_command: cmd.exe /c "{{ bat_path }}"
