@@ -1,35 +1,41 @@
 ---
-- name: Install ECR ActiveX Library
+
+* name: Install ECR ActiveX Library (silent)
   hosts: all
   gather_facts: no
 
   vars:
-    installer_url: "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
-    installer_path: "C:\\Temp\\ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
+  installer_url: "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
+  installer_path: "C:\Temp\ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
 
   tasks:
 
-    - name: Ensure Temp directory exists
-      ansible.windows.win_file:
-        path: C:\Temp
-        state: directory
+  * name: Ensure Temp directory exists
+    ansible.windows.win_file:
+    path: C:\Temp
+    state: directory
 
-    - name: Download installer
-      ansible.windows.win_get_url:
-        url: "{{ installer_url }}"
-        dest: "{{ installer_path }}"
-        force: true
+  * name: Download installer
+    ansible.windows.win_get_url:
+    url: "{{ installer_url }}"
+    dest: "{{ installer_path }}"
+    force: true
 
-    - name: Install ECR ActiveX Library
-      ansible.windows.win_package:
-        path: "{{ installer_path }}"
-        state: present
-        arguments: /S
+  * name: Run silent installation
+    ansible.windows.win_command: >
+    "{{ installer_path }}" /S /NORESTART
+    register: install_result
+    ignore_errors: true
 
-    - name: Verify installation (optional check)
-      ansible.windows.win_command: echo "Installation completed"
+  * name: Show installation result
+    debug:
+    var: install_result
 
-    - name: Cleanup installer
-      ansible.windows.win_file:
-        path: "{{ installer_path }}"
-        state: absent
+  * name: Wait after install
+    ansible.windows.win_wait_for:
+    timeout: 10
+
+  * name: Cleanup installer
+    ansible.windows.win_file:
+    path: "{{ installer_path }}"
+    state: absent
