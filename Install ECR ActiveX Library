@@ -1,17 +1,14 @@
-- name: Install ECR via BAT script
+- name: Install ECR ActiveX Library via PowerShell
   hosts: windows
   gather_facts: no
 
   vars:
     installer_url: "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
-    bat_url: "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/install_ecr.bat"
-
     installer_path: "C:\\Temp\\ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
-    bat_path: "C:\\Temp\\install_ecr.bat"
 
   tasks:
 
-    - name: Create temp dir
+    - name: Ensure Temp directory exists
       ansible.windows.win_file:
         path: C:\Temp
         state: directory
@@ -22,11 +19,34 @@
         dest: "{{ installer_path }}"
         force: true
 
-    - name: Download BAT
-      ansible.windows.win_get_url:
-        url: "{{ bat_url }}"
-        dest: "{{ bat_path }}"
-        force: true
+    - name: Install ECR silently via PowerShell
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = "Stop"
 
-    - name: Run BAT
-      ansible.windows.win_command: cmd.exe /c "{{ bat_path }}"
+        $installer = "C:\Temp\ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
+
+        Write-Host "Starting installation..."
+
+        $process = Start-Process -FilePath $installer `
+          -ArgumentList "/verysilent /norestart" `
+          -Wait -PassThru
+
+        Write-Host "Exit code:" $process.ExitCode
+
+        if ($process.ExitCode -ne 0) {
+          throw "Installer failed with exit code $($process.ExitCode)"
+        }
+
+        Write-Host "Installation completed successfully"
+
+    - name: Verify ECR installation (registry check)
+      ansible.windows.win_shell: |
+        $found = Get-ChildItem HKCR:\CLSID -ErrorAction SilentlyContinue |
+          Where-Object { $_.Name -match "ECR" }
+
+        if ($found) {
+          Write-Host "ECR FOUND"
+        } else {
+          Write-Host "ECR NOT FOUND"
+          exit 1
+        }
