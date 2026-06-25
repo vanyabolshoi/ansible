@@ -29,6 +29,3 @@
         dest: "{{ bat_path }}"
         force: true
 
-    - name: Run BAT as Administrator
-      ansible.windows.win_shell: |
-        Start-Process -FilePath "{{ bat_path }}" -Verb RunAs -Wait
