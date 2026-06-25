@@ -25,15 +25,10 @@
     ansible.windows.win_command: >
     "{{ installer_path }}" /S /NORESTART
     register: install_result
-    ignore_errors: true
 
   * name: Show installation result
     debug:
     var: install_result
-
-  * name: Wait after install
-    ansible.windows.win_wait_for:
-    timeout: 10
 
   * name: Cleanup installer
     ansible.windows.win_file:
