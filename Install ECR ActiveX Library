@@ -1,16 +1,12 @@
-- name: Install ECR ActiveX Library via BAT script
+- name: Download ECR ActiveX Library only
   hosts: windows
   gather_facts: no
 
   vars:
     installer_url: "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
-    bat_url: "https://raw.githubusercontent.com/vanyabolshoi/ansible/main/install_ecr.bat"
-
     installer_path: "C:\\Temp\\ECR_ActiveX_Library_x64_v.1.10.6.2.exe"
-    bat_path: "C:\\Temp\\install_ecr.bat"
 
   tasks:
-
     - name: Ensure C:\Temp exists
       ansible.windows.win_file:
         path: C:\Temp
@@ -22,22 +18,6 @@
         dest: "{{ installer_path }}"
         force: true
 
-    - name: Download BAT script
-      ansible.windows.win_get_url:
-        url: "{{ bat_url }}"
-        dest: "{{ bat_path }}"
-        force: true
-
-    - name: Run BAT installer (NO SHELL, NO POWERSHELL)
-      ansible.windows.win_command: cmd.exe /c "{{ bat_path }}"
-      register: bat_result
-      ignore_errors: no
-
-    - name: Show BAT result
+    - name: Show download location
       debug:
-        var: bat_result
-
-    - name: Fail if BAT returned error
-      ansible.builtin.fail:
-        msg: "BAT installation failed with exit code {{ bat_result.rc }}"
-      when: bat_result.rc != 0
+        msg: "Installer downloaded to {{ installer_path }}"
