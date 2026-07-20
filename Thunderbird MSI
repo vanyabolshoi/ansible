@@ -1,21 +1,27 @@
-- name: Создать папку для загрузки
-  ansible.windows.win_file:
-    path: C:\Temp
-    state: directory
+---
+- name: Установить Thunderbird
+  hosts: all
+  gather_facts: false
 
-- name: Скачать Thunderbird MSI
-  ansible.windows.win_get_url:
-    url: "https://drive.google.com/uc?export=download&id=1ayazNr4YFOMFWXECeQwXTgyDNfmjwyiY"
-    dest: "C:\Temp\Thunderbird.msi"
-    force: no
+  tasks:
+    - name: Создать папку для загрузки
+      ansible.windows.win_file:
+        path: C:\Temp
+        state: directory
 
-- name: Установить Thunderbird для всех пользователей
-  ansible.windows.win_package:
-    path: "C:\Temp\Thunderbird.msi"
-    state: present
-    arguments: "/qn ALLUSERS=1"
+    - name: Скачать Thunderbird MSI
+      ansible.windows.win_get_url:
+        url: "https://drive.google.com/uc?export=download&id=1ayazNr4YFOMFWXECeQwXTgyDNfmjwyiY"
+        dest: 'C:\Temp\Thunderbird.msi'
+        force: no
 
-- name: Удалить установщик
-  ansible.windows.win_file:
-    path: "C:\Temp\Thunderbird.msi"
-    state: absent
+    - name: Установить Thunderbird для всех пользователей
+      ansible.windows.win_package:
+        path: 'C:\Temp\Thunderbird.msi'
+        state: present
+        arguments: "/qn ALLUSERS=1"
+
+    - name: Удалить установщик
+      ansible.windows.win_file:
+        path: 'C:\Temp\Thunderbird.msi'
+        state: absent
