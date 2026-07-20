@@ -11,11 +11,11 @@
 
     - name: Скачать Thunderbird MSI
       ansible.windows.win_get_url:
-        url: "https://drive.google.com/uc?export=download&id=1ayazNr4YFOMFWXECeQwXTgyDNfmjwyiY"
+        url: "https://download.mozilla.org/?product=thunderbird-msi-latest-ssl&os=win64&lang=ru"
         dest: 'C:\Temp\Thunderbird.msi'
-        force: no
+        force: true
 
-    - name: Установить Thunderbird для всех пользователей
+    - name: Установить Thunderbird
       ansible.windows.win_package:
         path: 'C:\Temp\Thunderbird.msi'
         state: present
