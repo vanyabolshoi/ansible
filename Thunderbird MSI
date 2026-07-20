@@ -1,5 +1,5 @@
 ---
-- name: Установить Thunderbird
+- name: Установить Thunderbird и удалить Windows Live Mail
   hosts: all
   gather_facts: false
 
@@ -21,7 +21,25 @@
         state: present
         arguments: "/qn ALLUSERS=1"
 
-    - name: Удалить установщик
+    - name: Удалить установщик Thunderbird
       ansible.windows.win_file:
         path: 'C:\Temp\Thunderbird.msi'
         state: absent
+
+    - name: Проверить наличие Windows Live Installer
+      ansible.windows.win_stat:
+        path: 'C:\Program Files (x86)\Windows Live\Installer\wlarp.exe'
+      register: wlarp
+
+    - name: Удалить Windows Live Mail через wlarp
+      ansible.windows.win_command: >
+        "C:\Program Files (x86)\Windows Live\Installer\wlarp.exe"
+        /cleanup:mail
+        /q
+      when: wlarp.stat.exists
+
+    - name: Удалить Windows Live Mail через MSI (если wlarp отсутствует)
+      ansible.windows.win_package:
+        product_id: "{C325D201-108B-410F-98F7-F3F1B3CA555A}"
+        state: absent
+      when: not wlarp.stat.exists
