@@ -1,0 +1,21 @@
+---
+- name: Install Chrome extension
+  hosts: windows
+  gather_facts: false
+
+  tasks:
+    - name: Create Chrome policy key
+      ansible.windows.win_regedit:
+        path: HKLM:\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist
+        state: present
+
+    - name: Force install Authenticator extension
+      ansible.windows.win_regedit:
+        path: HKLM:\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist
+        name: "1"
+        data: "bhghoamapcdpbohphigoooaddinpkbai;https://clients2.google.com/service/update2/crx"
+        type: string
+
+    - name: Restart Chrome if running
+      ansible.windows.win_shell: |
+        Get-Process chrome -ErrorAction SilentlyContinue | Stop-Process -Force
