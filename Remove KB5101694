@@ -1,23 +1,22 @@
 ---
-- name: Remove KB5101694 and disable Windows Update
+- name: Remove KB5101684 and disable Windows Update
   hosts: windows
   gather_facts: false
 
   tasks:
 
-    - name: Check if KB5101694 is installed
+    - name: Check if KB5101684 is installed
       ansible.windows.win_shell: |
-        if (Get-HotFix -Id KB5101694 -ErrorAction SilentlyContinue) {
+        if (Get-HotFix -Id KB5101684 -ErrorAction SilentlyContinue) {
           Write-Output "INSTALLED"
         }
       register: kb_check
       changed_when: false
 
-    - name: Uninstall KB5101694
+    - name: Uninstall KB5101684
       ansible.windows.win_shell: |
-        Start-Process -FilePath "wusa.exe" -ArgumentList "/uninstall /kb:5101694 /quiet /norestart" -Wait
+        wusa.exe /uninstall /kb:5101684 /quiet /norestart
       when: "'INSTALLED' in kb_check.stdout"
-      register: uninstall_result
 
     - name: Stop Windows Update service
       ansible.windows.win_service:
@@ -29,6 +28,20 @@
         name: wuauserv
         start_mode: disabled
 
+    - name: Disable Update Orchestrator Service
+      ansible.windows.win_service:
+        name: UsoSvc
+        state: stopped
+        start_mode: disabled
+      ignore_errors: true
+
+    - name: Disable Delivery Optimization
+      ansible.windows.win_service:
+        name: DoSvc
+        state: stopped
+        start_mode: disabled
+      ignore_errors: true
+
     - name: Disable Windows Update Medic Service
       ansible.windows.win_regedit:
         path: HKLM:\SYSTEM\CurrentControlSet\Services\WaaSMedicSvc
@@ -36,29 +49,17 @@
         data: 4
         type: dword
 
-    - name: Disable Windows Update scheduled tasks
+    - name: Disable Windows Update tasks
       ansible.windows.win_shell: |
-        $tasks = Get-ScheduledTask | Where-Object {
-          $_.TaskPath -like "\Microsoft\Windows\WindowsUpdate\*"
-        }
-
-        foreach ($task in $tasks) {
-          Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath
-        }
-      ignore_errors: true
-
-    - name: Disable Windows Update Orchestrator tasks
-      ansible.windows.win_shell: |
-        $tasks = Get-ScheduledTask | Where-Object {
+        Get-ScheduledTask |
+        Where-Object {
+          $_.TaskPath -like "\Microsoft\Windows\WindowsUpdate\*" -or
           $_.TaskPath -like "\Microsoft\Windows\UpdateOrchestrator\*"
-        }
-
-        foreach ($task in $tasks) {
-          Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath
-        }
+        } |
+        Disable-ScheduledTask
       ignore_errors: true
 
-    - name: Reboot if KB was removed
+    - name: Reboot if KB was installed
       ansible.windows.win_reboot:
         reboot_timeout: 3600
       when: "'INSTALLED' in kb_check.stdout"
