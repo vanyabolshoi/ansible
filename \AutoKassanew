@@ -4,15 +4,26 @@
   gather_facts: no
 
   vars:
-    msi_url: "https://drive.google.com/uc?export=download&id=1u-2O5-bMZspwoMb-42tVFDopBBQklz7I"
-    msi_file: "C:\\Temp\\AutoKassa.msi"
-    process_name: "AutoKassa"
+    msi_url: "http://10.9.0.10/soft/EncashSetup2.msi"
+    msi_file: "C:\\Temp\\EncashSetup2.msi"
 
   tasks:
+
     - name: Create temp directory
       win_file:
         path: C:\Temp
         state: directory
+
+    - name: Stop running Encash processes
+      win_shell: |
+        Get-Process | Where-Object {
+          $_.ProcessName -match "Encash|AutoKassa|Kassa"
+        } | Stop-Process -Force
+      failed_when: false
+
+    - name: Wait for processes to close
+      win_wait_for:
+        timeout: 5
 
     - name: Download MSI
       win_get_url:
@@ -20,21 +31,7 @@
         dest: "{{ msi_file }}"
         force: yes
 
-    - name: Stop AutoKassa process
-      win_shell: |
-        Get-Process -Name "{{ process_name }}" -ErrorAction SilentlyContinue | Stop-Process -Force
-      ignore_errors: yes
-
-    - name: Kill msiexec if hanging
-      win_shell: |
-        Get-Process msiexec -ErrorAction SilentlyContinue | Stop-Process -Force
-      ignore_errors: yes
-
-    - name: Wait after process stop
-      pause:
-        seconds: 5
-
-    - name: Install MSI
+    - name: Install MSI silently
       win_package:
         path: "{{ msi_file }}"
         state: present
@@ -45,3 +42,9 @@
       win_reboot:
         reboot_timeout: 1800
       when: install_result.reboot_required | default(false)
+
+    - name: Show installation result
+      debug:
+        msg:
+          - "Changed: {{ install_result.changed }}"
+          - "Reboot required: {{ install_result.reboot_required | default(false) }}"
