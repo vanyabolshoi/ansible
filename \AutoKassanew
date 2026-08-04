@@ -1,11 +1,11 @@
 ---
-- name: Update AutoKassa
+- name: Update Encash
   hosts: all
   gather_facts: no
 
   vars:
-    msi_url: "http://10.9.0.10/soft/EncashSetup2.msi"
-    msi_file: "C:\\Temp\\EncashSetup2.msi"
+    download_url: "ВСТАВЬ_СЮДА_ПОЛНУЮ_ССЫЛКУ_OneDrive"
+    local_file: "C:\\Temp\\EncashSetup2.msi"
 
   tasks:
 
@@ -14,7 +14,7 @@
         path: C:\Temp
         state: directory
 
-    - name: Stop running Encash processes
+    - name: Close Encash processes
       win_shell: |
         Get-Process | Where-Object {
           $_.ProcessName -match "Encash|AutoKassa|Kassa"
@@ -22,18 +22,29 @@
       failed_when: false
 
     - name: Wait for processes to close
-      win_wait_for:
-        timeout: 5
+      pause:
+        seconds: 5
 
-    - name: Download MSI
+    - name: Download installer
       win_get_url:
-        url: "{{ msi_url }}"
-        dest: "{{ msi_file }}"
+        url: "{{ download_url }}"
+        dest: "{{ local_file }}"
         force: yes
+        timeout: 600
 
-    - name: Install MSI silently
+    - name: Verify downloaded file size
+      win_stat:
+        path: "{{ local_file }}"
+      register: msi_file
+
+    - name: Stop if file is too small
+      fail:
+        msg: "Downloaded file is invalid. Size: {{ msi_file.stat.size }} bytes"
+      when: msi_file.stat.size | int < 1000000
+
+    - name: Install MSI
       win_package:
-        path: "{{ msi_file }}"
+        path: "{{ local_file }}"
         state: present
         arguments: "/qn /norestart"
       register: install_result
@@ -43,8 +54,9 @@
         reboot_timeout: 1800
       when: install_result.reboot_required | default(false)
 
-    - name: Show installation result
+    - name: Show result
       debug:
         msg:
+          - "Installation completed"
           - "Changed: {{ install_result.changed }}"
           - "Reboot required: {{ install_result.reboot_required | default(false) }}"
