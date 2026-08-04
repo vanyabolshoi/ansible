@@ -1,0 +1,47 @@
+---
+- name: Update AutoKassa
+  hosts: all
+  gather_facts: no
+
+  vars:
+    msi_url: "https://drive.google.com/uc?export=download&id=1u-2O5-bMZspwoMb-42tVFDopBBQklz7I"
+    msi_file: "C:\\Temp\\AutoKassa.msi"
+    process_name: "AutoKassa"
+
+  tasks:
+    - name: Create temp directory
+      win_file:
+        path: C:\Temp
+        state: directory
+
+    - name: Download MSI
+      win_get_url:
+        url: "{{ msi_url }}"
+        dest: "{{ msi_file }}"
+        force: yes
+
+    - name: Stop AutoKassa process
+      win_shell: |
+        Get-Process -Name "{{ process_name }}" -ErrorAction SilentlyContinue | Stop-Process -Force
+      ignore_errors: yes
+
+    - name: Kill msiexec if hanging
+      win_shell: |
+        Get-Process msiexec -ErrorAction SilentlyContinue | Stop-Process -Force
+      ignore_errors: yes
+
+    - name: Wait after process stop
+      pause:
+        seconds: 5
+
+    - name: Install MSI
+      win_package:
+        path: "{{ msi_file }}"
+        state: present
+        arguments: "/qn /norestart"
+      register: install_result
+
+    - name: Reboot if required
+      win_reboot:
+        reboot_timeout: 1800
+      when: install_result.reboot_required | default(false)
