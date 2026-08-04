@@ -1,0 +1,22 @@
+- name: Получить данные с Windows
+  win_shell: |
+    $ip = (Get-NetIPAddress -AddressFamily IPv4 |
+      Where-Object {$_.IPAddress -notmatch '^127\.'} |
+      Select-Object -First 1 -ExpandProperty IPAddress)
+
+    Write-Output "===== START ====="
+    Write-Output "HOST: $env:COMPUTERNAME"
+    Write-Output "IP: $ip"
+    Write-Output "USER: $env:USERNAME"
+    Get-Content C:\Temp\authenticator.json -Raw
+    Write-Output "===== END ====="
+  register: auth_data
+
+- name: Записать в общий файл на Semaphore
+  delegate_to: localhost
+  become: false
+  lineinfile:
+    path: /opt/semaphore/authenticator_backup.txt
+    create: yes
+    line: "{{ auth_data.stdout }}"
+    insertafter: EOF
