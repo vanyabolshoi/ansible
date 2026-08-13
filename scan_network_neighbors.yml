@@ -1,9 +1,11 @@
 ---
-- name: Scan pharmacy local network around server .5 IP
+- name: Scan pharmacy local network around server LAN IP
   hosts: windows
   gather_facts: false
   vars:
     database_hint: ''
+    scan_host: ''
+    scan_subnet: ''
 
   tasks:
     - name: Write network scan script to remote host
@@ -13,31 +15,24 @@
           $ErrorActionPreference = "Stop"
 
           function Get-PrimaryServerIp {
-            $ips = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            $all = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
               Where-Object {
                 $_.IPAddress -notlike '127.*' -and
                 $_.IPAddress -notlike '169.254*' -and
-                $_.IPAddress -notlike '0.*' -and
-                $_.IPAddress -notlike '10.8.*' -and
-                $_.IPAddress -match '\.5$'
+                $_.IPAddress -notlike '0.*'
               } |
               Sort-Object InterfaceMetric, SkipAsSource |
               Select-Object -ExpandProperty IPAddress)
-            # Prefer 10.10.x.x (pharmacy LAN), skip VPN (10.8.x.x)
-            $preferred = @($ips | Where-Object { $_ -like '10.10.*' })
+            # Skip VPN (10.8.x.x), prefer 10.10.x.x (pharmacy LAN),
+            # then any *.5, then any LAN IP (server is not always .5)
+            $lan = @($all | Where-Object { $_ -notlike '10.8.*' })
+            $preferred = @($lan | Where-Object { $_ -like '10.10.*' })
             if ($preferred.Count -gt 0) { return [string]$preferred[0] }
-            if ($ips.Count -gt 0) { return [string]$ips[0] }
-            # Fallback: include 10.8.x.x if nothing else found
-            $allIps = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-              Where-Object {
-                $_.IPAddress -notlike '127.*' -and
-                $_.IPAddress -notlike '169.254*' -and
-                $_.IPAddress -notlike '0.*' -and
-                $_.IPAddress -match '\.5$'
-              } |
-              Sort-Object InterfaceMetric, SkipAsSource |
-              Select-Object -ExpandProperty IPAddress)
-            if ($allIps.Count -gt 0) { return [string]$allIps[0] }
+            $fives = @($lan | Where-Object { $_ -match '\.5$' })
+            if ($fives.Count -gt 0) { return [string]$fives[0] }
+            if ($lan.Count -gt 0) { return [string]$lan[0] }
+            # Last resort: include 10.8.x.x if no other IPv4 found
+            if ($all.Count -gt 0) { return [string]$all[0] }
             return ""
           }
 
@@ -121,16 +116,22 @@
             return @($found | Select-Object -Unique)
           }
 
-          $serverIp = Get-PrimaryServerIp
+          $serverIp = ''
+          if ('{{ scan_host }}') { $serverIp = '{{ scan_host }}' }
+          if (-not $serverIp) { $serverIp = Get-PrimaryServerIp }
           if (-not $serverIp) {
-            throw 'Server IP ending in .5 not found'
+            throw 'Server LAN IP not found'
           }
 
-          $parts = $serverIp.Split('.')
-          if ($parts.Count -ne 4) {
-            throw "Invalid server IP: $serverIp"
+          $subnet = ''
+          if ('{{ scan_subnet }}') { $subnet = '{{ scan_subnet }}' }
+          if (-not $subnet) {
+            $parts = $serverIp.Split('.')
+            if ($parts.Count -ne 4) {
+              throw "Invalid server IP: $serverIp"
+            }
+            $subnet = "$($parts[0]).$($parts[1]).$($parts[2])."
           }
-          $subnet = "$($parts[0]).$($parts[1]).$($parts[2])."
           $database = Get-DatabaseName
           $cashIps = Test-NeighborIps -Subnet $subnet -Suffixes @(11,12,13,14,15,16) -Ports @(135,445,3389,5985,5986)
 
