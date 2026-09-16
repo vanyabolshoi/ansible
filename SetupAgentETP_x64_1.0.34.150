@@ -1,0 +1,30 @@
+- name: Update 1C Agent KIP to 1.0.34.150
+  hosts: windows
+  gather_facts: no
+
+  tasks:
+
+    - name: Download Agent KIP 1.0.34.150
+      ansible.windows.win_get_url:
+        url: "https://github.com/vanyabolshoi/ansible/raw/refs/heads/main/SetupAgentETP_x64_1.0.34.150.exe"
+        dest: "C:\\Windows\\Temp\\SetupAgentETP_x64_1.0.34.150.exe"
+        force: yes
+
+    - name: Stop AgentETP service
+      ansible.windows.win_service:
+        name: "AgentETP"
+        state: stopped
+      ignore_errors: yes
+
+    - name: Update Agent KIP
+      ansible.windows.win_command:
+        cmd: '"C:\Windows\Temp\SetupAgentETP_x64_1.0.34.150.exe" /S'
+      register: agent_install
+      changed_when: agent_install.rc == 0
+
+    - name: Start AgentETP service
+      ansible.windows.win_service:
+        name: "AgentETP"
+        state: started
+        start_mode: auto
+      ignore_errors: yes
