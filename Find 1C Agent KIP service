@@ -1,0 +1,23 @@
+---
+- name: Find 1C Agent KIP service
+  hosts: windows
+  gather_facts: no
+
+  tasks:
+
+    - name: Search Windows services
+      ansible.windows.win_shell: |
+        Get-CimInstance Win32_Service |
+          Where-Object {
+            $_.Name -match 'Agent|ETP|KIP|КИП|1C|1С' -or
+            $_.DisplayName -match 'Agent|ETP|KIP|КИП|1C|1С' -or
+            $_.PathName -match 'AgentETP|SetupAgentETP'
+          } |
+          Select-Object Name, DisplayName, State, StartMode, PathName |
+          Format-List
+      register: agent_services
+      changed_when: false
+
+    - name: Show found services
+      ansible.builtin.debug:
+        msg: "{{ agent_services.stdout }}"
