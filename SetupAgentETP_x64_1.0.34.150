@@ -1,3 +1,4 @@
+```yaml
 ---
 - name: Update 1C Agent KIP to 1.0.34.150
   hosts: windows
@@ -11,12 +12,14 @@
 
   tasks:
 
-    # ---------------------------------------------------------
-    # Определяем текущую версию AgentETP
-    # ---------------------------------------------------------
+    # =========================================================
+    # ТЕКУЩАЯ ВЕРСИЯ
+    # =========================================================
 
     - name: Get installed AgentETP version
       ansible.windows.win_shell: |
+        $ErrorActionPreference = "Continue"
+
         $service = Get-CimInstance Win32_Service -Filter "Name='{{ service_name }}'"
 
         if (-not $service) {
@@ -24,7 +27,17 @@
             exit 0
         }
 
+        Write-Output "Service name:"
+        Write-Output $service.Name
+
+        Write-Output "Service state:"
+        Write-Output $service.State
+
+        Write-Output "Service path:"
+        Write-Output $service.PathName
+
         $path = $service.PathName
+        $exe = $null
 
         if ($path -match '"([^"]+AgentETP\.exe)"') {
             $exe = $matches[1]
@@ -32,16 +45,20 @@
         elseif ($path -match '([A-Za-z]:\\.*AgentETP\.exe)') {
             $exe = $matches[1]
         }
-        else {
+
+        if (-not $exe) {
             Write-Output "EXE_NOT_FOUND"
             exit 0
         }
 
-        if (Test-Path $exe) {
-            $version = (Get-Item $exe).VersionInfo.ProductVersion
+        Write-Output "EXE=$exe"
 
-            Write-Output "EXE=$exe"
-            Write-Output "VERSION=$version"
+        if (Test-Path $exe) {
+            $versionInfo = Get-Item $exe
+
+            Write-Output "VERSION=$($versionInfo.VersionInfo.ProductVersion)"
+            Write-Output "FILE_VERSION=$($versionInfo.VersionInfo.FileVersion)"
+            Write-Output "PRODUCT=$($versionInfo.VersionInfo.ProductName)"
         }
         else {
             Write-Output "EXE_NOT_FOUND"
@@ -53,9 +70,10 @@
       ansible.builtin.debug:
         var: agent_version.stdout_lines
 
-    # ---------------------------------------------------------
-    # Скачиваем установщик
-    # ---------------------------------------------------------
+
+    # =========================================================
+    # СКАЧИВАНИЕ
+    # =========================================================
 
     - name: Download AgentETP 1.0.34.150
       ansible.windows.win_get_url:
@@ -63,9 +81,10 @@
         dest: "{{ installer_path }}"
         force: yes
 
-    # ---------------------------------------------------------
-    # Проверяем установщик
-    # ---------------------------------------------------------
+
+    # =========================================================
+    # ПРОВЕРКА УСТАНОВЩИКА
+    # =========================================================
 
     - name: Check installer
       ansible.windows.win_stat:
@@ -80,9 +99,10 @@
         fail_msg: "Установщик AgentETP не найден или имеет подозрительно маленький размер."
         success_msg: "Установщик AgentETP найден."
 
-    # ---------------------------------------------------------
-    # Останавливаем службу
-    # ---------------------------------------------------------
+
+    # =========================================================
+    # ОСТАНАВЛИВАЕМ СЛУЖБУ
+    # =========================================================
 
     - name: Stop 1C Agent KIP service
       ansible.windows.win_service:
@@ -90,181 +110,145 @@
         state: stopped
       register: service_stop
 
-    # ---------------------------------------------------------
-    # Устанавливаем AgentETP
-    # ---------------------------------------------------------
 
-    - name: Install AgentETP 1.0.34.150
+    # =========================================================
+    # ДИАГНОСТИЧЕСКАЯ УСТАНОВКА
+    # =========================================================
+
+    - name: Install AgentETP 1.0.34.150 - diagnostic
       ansible.windows.win_shell: |
-        $ErrorActionPreference = "Stop"
+        $ErrorActionPreference = "Continue"
 
         $installer = "{{ installer_path }}"
         $log = "{{ install_log }}"
+        $workDir = Split-Path $installer
 
-        Write-Output "Starting AgentETP installer..."
-        Write-Output "Installer: $installer"
-        Write-Output "Log: $log"
+        Write-Output "========================================"
+        Write-Output "AgentETP INSTALL DIAGNOSTIC"
+        Write-Output "========================================"
+
+        Write-Output "Installer : $installer"
+        Write-Output "WorkDir   : $workDir"
+        Write-Output "Log       : $log"
+        Write-Output ""
 
         if (-not (Test-Path $installer)) {
-            throw "Installer not found: $installer"
+            Write-Output "ERROR: Installer not found"
+            exit 10
         }
 
+        # -----------------------------------------------------
+        # Информация об EXE
+        # -----------------------------------------------------
+
+        Write-Output "========================================"
+        Write-Output "INSTALLER INFORMATION"
+        Write-Output "========================================"
+
+        $file = Get-Item $installer
+
+        Write-Output "Installer size: $($file.Length) bytes"
+        Write-Output "Installer date: $($file.LastWriteTime)"
+        Write-Output ""
+
+        Write-Output "File version information:"
+
+        $file.VersionInfo |
+            Select-Object FileVersion, ProductVersion, ProductName, CompanyName |
+            Format-List |
+            Out-String |
+            Write-Output
+
+
+        # -----------------------------------------------------
+        # Старые процессы
+        # -----------------------------------------------------
+
+        Write-Output "========================================"
+        Write-Output "EXISTING INSTALLER PROCESSES"
+        Write-Output "========================================"
+
+        Get-Process -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ProcessName -match "AgentETP|SetupAgentETP|msiexec"
+            } |
+            Select-Object Id, ProcessName, StartTime, Path |
+            Format-List |
+            Out-String |
+            Write-Output
+
+
+        # -----------------------------------------------------
         # Удаляем старый лог
+        # -----------------------------------------------------
+
         if (Test-Path $log) {
             Remove-Item $log -Force -ErrorAction SilentlyContinue
         }
 
+
+        # -----------------------------------------------------
         # Запускаем установщик
+        # -----------------------------------------------------
+
+        Write-Output "========================================"
+        Write-Output "STARTING INSTALLER"
+        Write-Output "========================================"
+
+        $startTime = Get-Date
+
+        Write-Output "Start time: $startTime"
+
         $process = Start-Process `
             -FilePath $installer `
             -ArgumentList "/S" `
-            -WorkingDirectory (Split-Path $installer) `
+            -WorkingDirectory $workDir `
             -PassThru
 
         Write-Output "Installer PID: $($process.Id)"
+        Write-Output ""
 
-        # Ждём максимум 10 минут
-        $timeout = 600
+
+        # -----------------------------------------------------
+        # Ждём максимум 15 минут
+        # -----------------------------------------------------
+
+        $timeout = 900
         $elapsed = 0
 
         while (-not $process.HasExited) {
 
-            Start-Sleep -Seconds 5
-            $elapsed += 5
+            Start-Sleep -Seconds 10
 
-            Write-Output "Installer running... $elapsed seconds"
+            $elapsed += 10
+
+            $process.Refresh()
+
+            Write-Output "Installer running: $elapsed sec"
+
+            # Показываем связанные процессы
+            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.ProcessId -eq $process.Id -or
+                    $_.ParentProcessId -eq $process.Id
+                } |
+                Select-Object ProcessId, ParentProcessId, Name, CommandLine |
+                Format-Table -AutoSize |
+                Out-String |
+                Write-Output
 
             if ($elapsed -ge $timeout) {
 
+                Write-Output ""
+                Write-Output "========================================"
                 Write-Output "INSTALLER TIMEOUT"
+                Write-Output "========================================"
 
-                try {
-                    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-                }
-                catch {
-                }
-
-                throw "AgentETP installer exceeded 10 minute timeout."
-            }
-        }
-
-        $exitCode = $process.ExitCode
-
-        Write-Output "Installer finished."
-        Write-Output "Exit code: $exitCode"
-
-        if (Test-Path $log) {
-            Write-Output "Installation log:"
-            Get-Content $log -Tail 100 -ErrorAction SilentlyContinue
-        }
-
-        if ($exitCode -ne 0) {
-            throw "AgentETP installer failed with exit code $exitCode"
-        }
-      register: installer_result
-
-    - name: Show installer result
-      ansible.builtin.debug:
-        msg:
-          - "Installer stdout:"
-          - "{{ installer_result.stdout }}"
-          - "Installer stderr:"
-          - "{{ installer_result.stderr }}"
-
-    # ---------------------------------------------------------
-    # Ждём завершения фоновых процессов установщика
-    # ---------------------------------------------------------
-
-    - name: Wait for AgentETP installation
-      ansible.windows.win_shell: |
-        Start-Sleep -Seconds 10
-      changed_when: false
-
-    # ---------------------------------------------------------
-    # Запускаем службу
-    # ---------------------------------------------------------
-
-    - name: Start 1C Agent KIP service
-      ansible.windows.win_service:
-        name: "{{ service_name }}"
-        state: started
-        start_mode: auto
-
-    # ---------------------------------------------------------
-    # Проверяем установленную версию
-    # ---------------------------------------------------------
-
-    - name: Check AgentETP version after update
-      ansible.windows.win_shell: |
-        $service = Get-CimInstance Win32_Service -Filter "Name='{{ service_name }}'"
-
-        if (-not $service) {
-            Write-Output "SERVICE_NOT_FOUND"
-            exit 1
-        }
-
-        Write-Output "Service path:"
-        Write-Output $service.PathName
-
-        if ($service.PathName -match '"([^"]+AgentETP\.exe)"') {
-            $exe = $matches[1]
-        }
-        elseif ($service.PathName -match '([A-Za-z]:\\.*AgentETP\.exe)') {
-            $exe = $matches[1]
-        }
-        else {
-            Write-Output "EXE_NOT_FOUND"
-            exit 1
-        }
-
-        Write-Output "AgentETP EXE: $exe"
-
-        if (-not (Test-Path $exe)) {
-            Write-Output "EXE_NOT_FOUND"
-            exit 1
-        }
-
-        $version = (Get-Item $exe).VersionInfo.ProductVersion
-
-        Write-Output "Installed version: $version"
-
-        if ($version -eq "{{ target_version }}") {
-            Write-Output "UPDATE_SUCCESS"
-            exit 0
-        }
-        else {
-            Write-Output "VERSION_MISMATCH"
-            exit 2
-        }
-      register: version_check
-      changed_when: false
-
-    - name: Show final version
-      ansible.builtin.debug:
-        var: version_check.stdout_lines
-
-    # ---------------------------------------------------------
-    # Проверяем службу
-    # ---------------------------------------------------------
-
-    - name: Check AgentETP service
-      ansible.windows.win_service:
-        name: "{{ service_name }}"
-      register: agent_service
-      changed_when: false
-
-    - name: Verify AgentETP service is running
-      ansible.builtin.assert:
-        that:
-          - agent_service.state == "started"
-        fail_msg: "1С:Агент КИП установлен, но служба не запущена!"
-        success_msg: "1С:Агент КИП запущен."
-
-    # ---------------------------------------------------------
-    # Удаляем установщик
-    # ---------------------------------------------------------
-
-    - name: Remove installer
-      ansible.windows.win_file:
-        path: "{{ installer_path }}"
-        state: absent
+                Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+                    Where-Object {
+                        $_.Name -match "SetupAgentETP|AgentETP|msiexec"
+                    } |
+                    Select-Object ProcessId, ParentProcessId, Name, CommandLine |
+                    Format-List |
+                    Out-String |
+```
