@@ -6,15 +6,11 @@
 
   vars:
     target_version: "1.0.34.150"
-    installer_path: "C:\\Windows\\Temp\\SetupAgentETP_x64_1.0.34.150.exe"
-    install_log: "C:\\Windows\\Temp\\AgentETP_install.log"
-    service_name: "1C_AgentETP_x86-64"
+    installer_path: 'C:\Windows\Temp\SetupAgentETP_x64_1.0.34.150.exe'
+    install_log: 'C:\Windows\Temp\AgentETP_install.log'
+    service_name: '1C_AgentETP_x86-64'
 
   tasks:
-
-    # =========================================================
-    # ТЕКУЩАЯ ВЕРСИЯ
-    # =========================================================
 
     - name: Get installed AgentETP version
       ansible.windows.win_shell: |
@@ -27,14 +23,9 @@
             exit 0
         }
 
-        Write-Output "Service name:"
-        Write-Output $service.Name
-
-        Write-Output "Service state:"
-        Write-Output $service.State
-
-        Write-Output "Service path:"
-        Write-Output $service.PathName
+        Write-Output "Service name: $($service.Name)"
+        Write-Output "Service state: $($service.State)"
+        Write-Output "Service path: $($service.PathName)"
 
         $path = $service.PathName
         $exe = $null
@@ -54,11 +45,11 @@
         Write-Output "EXE=$exe"
 
         if (Test-Path $exe) {
-            $versionInfo = Get-Item $exe
+            $item = Get-Item $exe
 
-            Write-Output "VERSION=$($versionInfo.VersionInfo.ProductVersion)"
-            Write-Output "FILE_VERSION=$($versionInfo.VersionInfo.FileVersion)"
-            Write-Output "PRODUCT=$($versionInfo.VersionInfo.ProductName)"
+            Write-Output "VERSION=$($item.VersionInfo.ProductVersion)"
+            Write-Output "FILE_VERSION=$($item.VersionInfo.FileVersion)"
+            Write-Output "PRODUCT=$($item.VersionInfo.ProductName)"
         }
         else {
             Write-Output "EXE_NOT_FOUND"
@@ -71,10 +62,6 @@
         var: agent_version.stdout_lines
 
 
-    # =========================================================
-    # СКАЧИВАНИЕ
-    # =========================================================
-
     - name: Download AgentETP 1.0.34.150
       ansible.windows.win_get_url:
         url: "https://github.com/vanyabolshoi/ansible/raw/refs/heads/main/SetupAgentETP_x64_1.0.34.150.exe"
@@ -82,14 +69,11 @@
         force: yes
 
 
-    # =========================================================
-    # ПРОВЕРКА УСТАНОВЩИКА
-    # =========================================================
-
     - name: Check installer
       ansible.windows.win_stat:
         path: "{{ installer_path }}"
       register: installer_file
+
 
     - name: Verify installer exists
       ansible.builtin.assert:
@@ -100,10 +84,6 @@
         success_msg: "Установщик AgentETP найден."
 
 
-    # =========================================================
-    # ОСТАНАВЛИВАЕМ СЛУЖБУ
-    # =========================================================
-
     - name: Stop 1C Agent KIP service
       ansible.windows.win_service:
         name: "{{ service_name }}"
@@ -111,11 +91,7 @@
       register: service_stop
 
 
-    # =========================================================
-    # ДИАГНОСТИЧЕСКАЯ УСТАНОВКА
-    # =========================================================
-
-    - name: Install AgentETP 1.0.34.150 - diagnostic
+    - name: Install AgentETP 1.0.34.150 diagnostic
       ansible.windows.win_shell: |
         $ErrorActionPreference = "Continue"
 
@@ -124,12 +100,11 @@
         $workDir = Split-Path $installer
 
         Write-Output "========================================"
-        Write-Output "AgentETP INSTALL DIAGNOSTIC"
+        Write-Output "AGENTETP INSTALL DIAGNOSTIC"
         Write-Output "========================================"
-
-        Write-Output "Installer : $installer"
-        Write-Output "WorkDir   : $workDir"
-        Write-Output "Log       : $log"
+        Write-Output "Installer: $installer"
+        Write-Output "WorkDir: $workDir"
+        Write-Output "Log: $log"
         Write-Output ""
 
         if (-not (Test-Path $installer)) {
@@ -137,21 +112,15 @@
             exit 10
         }
 
-        # -----------------------------------------------------
-        # Информация об EXE
-        # -----------------------------------------------------
-
         Write-Output "========================================"
         Write-Output "INSTALLER INFORMATION"
         Write-Output "========================================"
 
         $file = Get-Item $installer
 
-        Write-Output "Installer size: $($file.Length) bytes"
-        Write-Output "Installer date: $($file.LastWriteTime)"
+        Write-Output "Size: $($file.Length) bytes"
+        Write-Output "LastWriteTime: $($file.LastWriteTime)"
         Write-Output ""
-
-        Write-Output "File version information:"
 
         $file.VersionInfo |
             Select-Object FileVersion, ProductVersion, ProductName, CompanyName |
@@ -160,12 +129,8 @@
             Write-Output
 
 
-        # -----------------------------------------------------
-        # Старые процессы
-        # -----------------------------------------------------
-
         Write-Output "========================================"
-        Write-Output "EXISTING INSTALLER PROCESSES"
+        Write-Output "EXISTING PROCESSES"
         Write-Output "========================================"
 
         Get-Process -ErrorAction SilentlyContinue |
@@ -178,26 +143,16 @@
             Write-Output
 
 
-        # -----------------------------------------------------
-        # Удаляем старый лог
-        # -----------------------------------------------------
-
         if (Test-Path $log) {
             Remove-Item $log -Force -ErrorAction SilentlyContinue
         }
 
-
-        # -----------------------------------------------------
-        # Запускаем установщик
-        # -----------------------------------------------------
 
         Write-Output "========================================"
         Write-Output "STARTING INSTALLER"
         Write-Output "========================================"
 
         $startTime = Get-Date
-
-        Write-Output "Start time: $startTime"
 
         $process = Start-Process `
             -FilePath $installer `
@@ -206,12 +161,9 @@
             -PassThru
 
         Write-Output "Installer PID: $($process.Id)"
+        Write-Output "Start time: $startTime"
         Write-Output ""
 
-
-        # -----------------------------------------------------
-        # Ждём максимум 15 минут
-        # -----------------------------------------------------
 
         $timeout = 900
         $elapsed = 0
@@ -219,14 +171,12 @@
         while (-not $process.HasExited) {
 
             Start-Sleep -Seconds 10
-
             $elapsed += 10
 
             $process.Refresh()
 
             Write-Output "Installer running: $elapsed sec"
 
-            # Показываем связанные процессы
             Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
                 Where-Object {
                     $_.ProcessId -eq $process.Id -or
@@ -239,7 +189,6 @@
 
             if ($elapsed -ge $timeout) {
 
-                Write-Output ""
                 Write-Output "========================================"
                 Write-Output "INSTALLER TIMEOUT"
                 Write-Output "========================================"
@@ -251,4 +200,220 @@
                     Select-Object ProcessId, ParentProcessId, Name, CommandLine |
                     Format-List |
                     Out-String |
+                    Write-Output
+
+                Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+
+                exit 20
+            }
+        }
+
+
+        $process.Refresh()
+        $exitCode = $process.ExitCode
+
+        Write-Output ""
+        Write-Output "========================================"
+        Write-Output "INSTALLER FINISHED"
+        Write-Output "========================================"
+        Write-Output "Exit code: $exitCode"
+        Write-Output "Duration: $((Get-Date) - $startTime)"
+        Write-Output ""
+
+
+        Write-Output "========================================"
+        Write-Output "PROCESSES AFTER INSTALLER"
+        Write-Output "========================================"
+
+        Get-Process -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ProcessName -match "AgentETP|SetupAgentETP|msiexec"
+            } |
+            Select-Object Id, ProcessName, StartTime, Path |
+            Format-List |
+            Out-String |
+            Write-Output
+
+
+        Write-Output "========================================"
+        Write-Output "AGENTETP SERVICE"
+        Write-Output "========================================"
+
+        $service = Get-CimInstance Win32_Service `
+            -Filter "Name='{{ service_name }}'" `
+            -ErrorAction SilentlyContinue
+
+        if ($service) {
+            $service |
+                Select-Object Name, State, StartMode, PathName |
+                Format-List |
+                Out-String |
+                Write-Output
+        }
+        else {
+            Write-Output "SERVICE_NOT_FOUND"
+        }
+
+
+        Write-Output "========================================"
+        Write-Output "AGENTETP FILES"
+        Write-Output "========================================"
+
+        if (Test-Path "C:\Program Files\1C\AgentETP") {
+
+            Get-ChildItem "C:\Program Files\1C\AgentETP" `
+                -Recurse `
+                -ErrorAction SilentlyContinue |
+                Select-Object FullName, Length, LastWriteTime |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -First 100 |
+                Format-Table -AutoSize |
+                Out-String |
+                Write-Output
+
+        }
+        else {
+            Write-Output "AGENTETP DIRECTORY NOT FOUND"
+        }
+
+
+        Write-Output "========================================"
+        Write-Output "WINDOWS TEMP AGENTETP FILES"
+        Write-Output "========================================"
+
+        Get-ChildItem "C:\Windows\Temp" `
+            -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.Name -match "AgentETP|SetupAgent|1C"
+            } |
+            Select-Object Name, Length, LastWriteTime, FullName |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 100 |
+            Format-Table -AutoSize |
+            Out-String |
+            Write-Output
+
+
+        Write-Output "========================================"
+        Write-Output "INSTALL LOG"
+        Write-Output "========================================"
+
+        if (Test-Path $log) {
+
+            $logInfo = Get-Item $log
+
+            Write-Output "Log exists"
+            Write-Output "Path: $($logInfo.FullName)"
+            Write-Output "Size: $($logInfo.Length)"
+            Write-Output "Date: $($logInfo.LastWriteTime)"
+            Write-Output ""
+
+            Write-Output "----- LAST 200 LINES -----"
+
+            Get-Content $log -Tail 200 -ErrorAction SilentlyContinue
+
+        }
+        else {
+            Write-Output "NO AgentETP_install.log FOUND"
+        }
+
+
+        Write-Output ""
+        Write-Output "========================================"
+        Write-Output "RECENT TEMP FILES"
+        Write-Output "========================================"
+
+        Get-ChildItem "C:\Windows\Temp" `
+            -File `
+            -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.LastWriteTime -ge $startTime
+            } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 100 `
+                Name,
+                Length,
+                LastWriteTime,
+                FullName |
+            Format-Table -AutoSize |
+            Out-String |
+            Write-Output
+
+
+        Write-Output ""
+        Write-Output "========================================"
+        Write-Output "APPLICATION ERRORS"
+        Write-Output "========================================"
+
+        Get-WinEvent `
+            -FilterHashtable @{
+                LogName = "Application"
+                StartTime = $startTime
+            } `
+            -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.LevelDisplayName -in @("Error", "Warning")
+            } |
+            Select-Object -First 50 `
+                TimeCreated,
+                ProviderName,
+                Id,
+                LevelDisplayName,
+                Message |
+            Format-List |
+            Out-String |
+            Write-Output
+
+
+        Write-Output ""
+        Write-Output "========================================"
+        Write-Output "MSI EVENTS"
+        Write-Output "========================================"
+
+        Get-WinEvent `
+            -FilterHashtable @{
+                LogName = "Application"
+                ProviderName = "MsiInstaller"
+                StartTime = $startTime
+            } `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 50 `
+                TimeCreated,
+                Id,
+                LevelDisplayName,
+                Message |
+            Format-List |
+            Out-String |
+            Write-Output
+
+
+        Write-Output ""
+        Write-Output "========================================"
+        Write-Output "DIAGNOSTIC FINISHED"
+        Write-Output "========================================"
+        Write-Output "Installer exit code: $exitCode"
+
+        exit 0
+
+      register: installer_result
+      changed_when: true
+
+
+    - name: Show installer diagnostic result
+      ansible.builtin.debug:
+        var: installer_result.stdout_lines
+
+
+    - name: Show installer diagnostic errors
+      ansible.builtin.debug:
+        var: installer_result.stderr_lines
+
+
+    - name: Diagnostic finished
+      ansible.builtin.debug:
+        msg:
+          - "Диагностика установщика завершена."
+          - "Установщик НЕ удалён."
+          - "Служба НЕ запускалась."
+          - "ExitCode установщика выведен выше."
 ```
