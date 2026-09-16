@@ -1,30 +1,180 @@
+---
 - name: Update 1C Agent KIP to 1.0.34.150
   hosts: windows
   gather_facts: no
 
+  vars:
+    target_version: "1.0.34.150"
+    installer_path: "C:\\Windows\\Temp\\SetupAgentETP_x64_1.0.34.150.exe"
+    service_name: "1C_AgentETP_x86-64"
+
   tasks:
 
-    - name: Download Agent KIP 1.0.34.150
+    # ---------------------------------------------------------
+    # Определяем текущую версию AgentETP
+    # ---------------------------------------------------------
+
+    - name: Get installed AgentETP version
+      ansible.windows.win_shell: |
+        $service = Get-CimInstance Win32_Service -Filter "Name='{{ service_name }}'"
+
+        if (-not $service) {
+            Write-Output "SERVICE_NOT_FOUND"
+            exit 0
+        }
+
+        $path = $service.PathName
+
+        if ($path -match '"([^"]+AgentETP\.exe)"') {
+            $exe = $matches[1]
+        }
+        elseif ($path -match '([A-Za-z]:\\.*AgentETP\.exe)') {
+            $exe = $matches[1]
+        }
+        else {
+            Write-Output "EXE_NOT_FOUND"
+            exit 0
+        }
+
+        if (Test-Path $exe) {
+            $version = (Get-Item $exe).VersionInfo.ProductVersion
+
+            Write-Output "EXE=$exe"
+            Write-Output "VERSION=$version"
+        }
+        else {
+            Write-Output "EXE_NOT_FOUND"
+        }
+      register: agent_version
+      changed_when: false
+
+    - name: Show current AgentETP version
+      ansible.builtin.debug:
+        var: agent_version.stdout_lines
+
+    # ---------------------------------------------------------
+    # Скачиваем новую версию
+    # ---------------------------------------------------------
+
+    - name: Download AgentETP 1.0.34.150
       ansible.windows.win_get_url:
         url: "https://github.com/vanyabolshoi/ansible/raw/refs/heads/main/SetupAgentETP_x64_1.0.34.150.exe"
-        dest: "C:\\Windows\\Temp\\SetupAgentETP_x64_1.0.34.150.exe"
+        dest: "{{ installer_path }}"
         force: yes
 
-    - name: Stop AgentETP service
+    # ---------------------------------------------------------
+    # Останавливаем службу
+    # ---------------------------------------------------------
+
+    - name: Stop 1C Agent KIP service
       ansible.windows.win_service:
-        name: "AgentETP"
+        name: "{{ service_name }}"
         state: stopped
-      ignore_errors: yes
+      register: service_stop
 
-    - name: Update Agent KIP
+    # ---------------------------------------------------------
+    # Запускаем установщик
+    # ---------------------------------------------------------
+
+    - name: Install AgentETP 1.0.34.150
       ansible.windows.win_command:
-        cmd: '"C:\Windows\Temp\SetupAgentETP_x64_1.0.34.150.exe" /S'
-      register: agent_install
-      changed_when: agent_install.rc == 0
+        cmd: '"{{ installer_path }}" /S'
+      register: installer_result
+      changed_when: installer_result.rc == 0
 
-    - name: Start AgentETP service
+    - name: Show installer result
+      ansible.builtin.debug:
+        msg:
+          - "Installer return code: {{ installer_result.rc }}"
+          - "Installer stdout: {{ installer_result.stdout }}"
+          - "Installer stderr: {{ installer_result.stderr }}"
+
+    # ---------------------------------------------------------
+    # Ждем завершения установки
+    # ---------------------------------------------------------
+
+    - name: Wait for AgentETP installation
+      ansible.windows.win_shell: |
+        Start-Sleep -Seconds 10
+      changed_when: false
+
+    # ---------------------------------------------------------
+    # Запускаем службу
+    # ---------------------------------------------------------
+
+    - name: Start 1C Agent KIP service
       ansible.windows.win_service:
-        name: "AgentETP"
+        name: "{{ service_name }}"
         state: started
         start_mode: auto
-      ignore_errors: yes
+
+    # ---------------------------------------------------------
+    # Проверяем установленную версию
+    # ---------------------------------------------------------
+
+    - name: Check AgentETP version after update
+      ansible.windows.win_shell: |
+        $service = Get-CimInstance Win32_Service -Filter "Name='{{ service_name }}'"
+
+        if (-not $service) {
+            Write-Output "SERVICE_NOT_FOUND"
+            exit 1
+        }
+
+        if ($service.PathName -match '"([^"]+AgentETP\.exe)"') {
+            $exe = $matches[1]
+        }
+        elseif ($service.PathName -match '([A-Za-z]:\\.*AgentETP\.exe)') {
+            $exe = $matches[1]
+        }
+
+        if (-not (Test-Path $exe)) {
+            Write-Output "EXE_NOT_FOUND"
+            exit 1
+        }
+
+        $version = (Get-Item $exe).VersionInfo.ProductVersion
+
+        Write-Output "AgentETP EXE: $exe"
+        Write-Output "Installed version: $version"
+
+        if ($version -eq "{{ target_version }}") {
+            Write-Output "UPDATE_SUCCESS"
+            exit 0
+        }
+        else {
+            Write-Output "VERSION_MISMATCH"
+            exit 2
+        }
+      register: version_check
+      changed_when: false
+
+    - name: Show final version
+      ansible.builtin.debug:
+        var: version_check.stdout_lines
+
+    # ---------------------------------------------------------
+    # Проверяем службу
+    # ---------------------------------------------------------
+
+    - name: Check AgentETP service
+      ansible.windows.win_service:
+        name: "{{ service_name }}"
+      register: agent_service
+      changed_when: false
+
+    - name: Verify AgentETP service is running
+      ansible.builtin.assert:
+        that:
+          - agent_service.state == "started"
+        fail_msg: "1С:Агент КИП установлен, но служба не запущена!"
+        success_msg: "1С:Агент КИП запущен."
+
+    # ---------------------------------------------------------
+    # Удаляем установщик
+    # ---------------------------------------------------------
+
+    - name: Remove installer
+      ansible.windows.win_file:
+        path: "{{ installer_path }}"
+        state: absent
