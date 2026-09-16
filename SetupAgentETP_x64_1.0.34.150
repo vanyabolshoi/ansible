@@ -6,6 +6,7 @@
   vars:
     target_version: "1.0.34.150"
     installer_path: "C:\\Windows\\Temp\\SetupAgentETP_x64_1.0.34.150.exe"
+    install_log: "C:\\Windows\\Temp\\AgentETP_install.log"
     service_name: "1C_AgentETP_x86-64"
 
   tasks:
@@ -53,7 +54,7 @@
         var: agent_version.stdout_lines
 
     # ---------------------------------------------------------
-    # Скачиваем новую версию
+    # Скачиваем установщик
     # ---------------------------------------------------------
 
     - name: Download AgentETP 1.0.34.150
@@ -61,6 +62,23 @@
         url: "https://github.com/vanyabolshoi/ansible/raw/refs/heads/main/SetupAgentETP_x64_1.0.34.150.exe"
         dest: "{{ installer_path }}"
         force: yes
+
+    # ---------------------------------------------------------
+    # Проверяем установщик
+    # ---------------------------------------------------------
+
+    - name: Check installer
+      ansible.windows.win_stat:
+        path: "{{ installer_path }}"
+      register: installer_file
+
+    - name: Verify installer exists
+      ansible.builtin.assert:
+        that:
+          - installer_file.stat.exists
+          - installer_file.stat.size > 100000
+        fail_msg: "Установщик AgentETP не найден или имеет подозрительно маленький размер."
+        success_msg: "Установщик AgentETP найден."
 
     # ---------------------------------------------------------
     # Останавливаем службу
@@ -73,24 +91,88 @@
       register: service_stop
 
     # ---------------------------------------------------------
-    # Запускаем установщик
+    # Устанавливаем AgentETP
     # ---------------------------------------------------------
 
     - name: Install AgentETP 1.0.34.150
-      ansible.windows.win_command:
-        cmd: '"{{ installer_path }}" /S'
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = "Stop"
+
+        $installer = "{{ installer_path }}"
+        $log = "{{ install_log }}"
+
+        Write-Output "Starting AgentETP installer..."
+        Write-Output "Installer: $installer"
+        Write-Output "Log: $log"
+
+        if (-not (Test-Path $installer)) {
+            throw "Installer not found: $installer"
+        }
+
+        # Удаляем старый лог
+        if (Test-Path $log) {
+            Remove-Item $log -Force -ErrorAction SilentlyContinue
+        }
+
+        # Запускаем установщик
+        $process = Start-Process `
+            -FilePath $installer `
+            -ArgumentList "/S" `
+            -WorkingDirectory (Split-Path $installer) `
+            -PassThru
+
+        Write-Output "Installer PID: $($process.Id)"
+
+        # Ждём максимум 10 минут
+        $timeout = 600
+        $elapsed = 0
+
+        while (-not $process.HasExited) {
+
+            Start-Sleep -Seconds 5
+            $elapsed += 5
+
+            Write-Output "Installer running... $elapsed seconds"
+
+            if ($elapsed -ge $timeout) {
+
+                Write-Output "INSTALLER TIMEOUT"
+
+                try {
+                    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                }
+                catch {
+                }
+
+                throw "AgentETP installer exceeded 10 minute timeout."
+            }
+        }
+
+        $exitCode = $process.ExitCode
+
+        Write-Output "Installer finished."
+        Write-Output "Exit code: $exitCode"
+
+        if (Test-Path $log) {
+            Write-Output "Installation log:"
+            Get-Content $log -Tail 100 -ErrorAction SilentlyContinue
+        }
+
+        if ($exitCode -ne 0) {
+            throw "AgentETP installer failed with exit code $exitCode"
+        }
       register: installer_result
-      changed_when: installer_result.rc == 0
 
     - name: Show installer result
       ansible.builtin.debug:
         msg:
-          - "Installer return code: {{ installer_result.rc }}"
-          - "Installer stdout: {{ installer_result.stdout }}"
-          - "Installer stderr: {{ installer_result.stderr }}"
+          - "Installer stdout:"
+          - "{{ installer_result.stdout }}"
+          - "Installer stderr:"
+          - "{{ installer_result.stderr }}"
 
     # ---------------------------------------------------------
-    # Ждем завершения установки
+    # Ждём завершения фоновых процессов установщика
     # ---------------------------------------------------------
 
     - name: Wait for AgentETP installation
@@ -121,12 +203,21 @@
             exit 1
         }
 
+        Write-Output "Service path:"
+        Write-Output $service.PathName
+
         if ($service.PathName -match '"([^"]+AgentETP\.exe)"') {
             $exe = $matches[1]
         }
         elseif ($service.PathName -match '([A-Za-z]:\\.*AgentETP\.exe)') {
             $exe = $matches[1]
         }
+        else {
+            Write-Output "EXE_NOT_FOUND"
+            exit 1
+        }
+
+        Write-Output "AgentETP EXE: $exe"
 
         if (-not (Test-Path $exe)) {
             Write-Output "EXE_NOT_FOUND"
@@ -135,7 +226,6 @@
 
         $version = (Get-Item $exe).VersionInfo.ProductVersion
 
-        Write-Output "AgentETP EXE: $exe"
         Write-Output "Installed version: $version"
 
         if ($version -eq "{{ target_version }}") {
