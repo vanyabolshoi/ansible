@@ -1,4 +1,3 @@
-```yaml
 ---
 - name: Get Windows version and IP
   hosts: windows
@@ -30,17 +29,16 @@
       register: windows_info
       changed_when: false
 
-    - name: Show result
+    - name: Show Windows information
       ansible.builtin.debug:
         msg: |
-          ╔══════════════════════════════════════════════════════════════════════╗
-          ║                     WINDOWS INFORMATION                            ║
-          ╠══════════════════════════════════════════════════════════════════════╣
+          ╔══════════════════════════════════════════════════════════════╗
+          ║                 WINDOWS INFORMATION                       ║
+          ╠══════════════════════════════════════════════════════════════╣
           ║ Computer : {{ (windows_info.stdout | from_json).ComputerName }}
           ║ IP       : {{ (windows_info.stdout | from_json).IP }}
           ║ Windows  : {{ (windows_info.stdout | from_json).Windows }}
           ║ Version  : {{ (windows_info.stdout | from_json).Version }}
           ║ Build    : {{ (windows_info.stdout | from_json).Build }}
           ║ Arch     : {{ (windows_info.stdout | from_json).Architecture }}
-          ╚══════════════════════════════════════════════════════════════════════╝
-```
+          ╚══════════════════════════════════════════════════════════════╝
