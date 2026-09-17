@@ -1,0 +1,30 @@
+---
+- name: Uninstall Agent KIP
+  hosts: windows
+  gather_facts: no
+
+  tasks:
+
+    - name: Find and uninstall Agent KIP
+      ansible.windows.win_shell: |
+        $apps = Get-WmiObject Win32_Product |
+          Where-Object { $_.Name -like "*Агент КИП*" }
+
+        if ($apps) {
+            foreach ($app in $apps) {
+                Write-Output "Найдено: $($app.Name)"
+                Write-Output "Версия: $($app.Version)"
+                
+                $result = $app.Uninstall()
+
+                Write-Output "Код удаления: $($result.ReturnValue)"
+            }
+        }
+        else {
+            Write-Output "Агент КИП не найден"
+        }
+      register: uninstall_result
+
+    - name: Show uninstall result
+      ansible.builtin.debug:
+        msg: "{{ uninstall_result.stdout_lines }}"
